@@ -33,6 +33,15 @@ def test_live_client_is_constructed(monkeypatch, tmp_path):
     assert client is not None and cassette is None
 
 
+def test_live_model_override_never_touches_replay(monkeypatch):
+    # A global model override made every replay fail (schema_error): cassettes are tied to the model they recorded.
+    monkeypatch.setenv("RETURNS_LIVE_MODEL", "gemini-test-model")
+    assert returns_app._round2_settings("live").rm_judgment_model == "gemini-test-model"
+    assert returns_app._round2_settings("replay").rm_judgment_model != "gemini-test-model"
+    monkeypatch.setenv("RETURNS_MODEL_MODE", "replay")
+    assert returns_app.handle(REQUEST)["evidence"]["status"] == "completed"
+
+
 def test_failed_live_requests_are_counted_in_the_pending_record(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-real")
     monkeypatch.setenv("RETURNS_MODEL_MODE", "live")

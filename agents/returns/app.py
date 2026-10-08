@@ -87,14 +87,21 @@ def _read_prompt_version() -> str:
     return "1.5.0"
 
 
-def _round2_settings() -> Settings:
+def _round2_settings(mode: str = "replay") -> Settings:
     """Round 2 Settings, with the Pod's LOG_LEVEL convention mapped onto Round 2's.
 
     The Pod documents LOG_LEVEL as DEBUG | INFO | WARNING (`.env.example`, `make run` sets WARNING); Round 2 accepts only
     lower-case debug | info | warning | error and raised a ValidationError on the Pod's values, which crashed this agent.
+
+    RETURNS_LIVE_MODEL picks the Gemini model for live/record mode only. Replay keeps the model the cassette was recorded
+    with (setting RM_JUDGMENT_MODEL globally made every replay fail with schema_error).
     """
     level = os.environ.get("LOG_LEVEL", "info").strip().lower()
-    return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info")
+    overrides = {}
+    live_model = os.environ.get("RETURNS_LIVE_MODEL")
+    if mode != "replay" and live_model:
+        overrides = {"rm_judgment_model": live_model, "rm_escalation_model": live_model}
+    return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info", **overrides)
 
 
 ROUND2_COMMIT = _read_round2_commit()
@@ -147,7 +154,7 @@ def handle(request: dict) -> dict:
     # 4. Model client and mode configuration (§4.4)
     mode = os.environ.get("RETURNS_MODEL_MODE", "replay")
     try:
-        settings = _round2_settings()
+        settings = _round2_settings(mode)
     except Exception as exc:  # a configuration problem is recorded, never a crash of the agent
         return pending_output(request, code="model_not_configured", message=f"Round 2 settings invalid: {exc}"[:500],
                               retryable=False, agent_id=AGENT_ID)
