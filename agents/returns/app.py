@@ -56,7 +56,11 @@ from shared.utils.server import make_app
 STAGE = "returns"
 AGENT_ID = "returns-manager-rtn0045@2"
 
-INPUT_DIR = Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input"))
+def _input_dir() -> Path:
+    """Read INPUT_DIR per call, as the orchestrator and the other agents do, so both sides resolve the same captures."""
+    return Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input"))
+
+
 R2_REF_DIR = REPO_ROOT / "agents" / "returns" / "r2" / "reference"
 CASSETTES_DIR = REPO_ROOT / "agents" / "returns" / "cassettes"
 
@@ -103,10 +107,11 @@ def handle(request: dict) -> dict:
 
     subject_id = request["subject"]["subject_id"]
     org_id = request["subject"]["org_id"]
+    input_dir = _input_dir()
 
     # 1. Tenancy and Order lookup (§4.1)
     # Raises LookupError directly if subject is unknown or belongs to another tenant
-    order = lookup_order(subject_id, org_id, input_dir=INPUT_DIR, r2_ref_dir=R2_REF_DIR)
+    order = lookup_order(subject_id, org_id, input_dir=input_dir, r2_ref_dir=R2_REF_DIR)
 
     if not order.category:
         return pending_output(
@@ -119,7 +124,7 @@ def handle(request: dict) -> dict:
 
     # 2. Captures discovery and validation (§4.2)
     try:
-        captures = resolve_captures(request, input_dir=INPUT_DIR)
+        captures = resolve_captures(request, input_dir=input_dir)
     except CaptureError as exc:
         return pending_output(
             request,
@@ -228,7 +233,7 @@ def handle(request: dict) -> dict:
     )
 
     # 6. Run Round 2 pipeline (§4.4)
-    transport = LocalCaptureTransport(INPUT_DIR)
+    transport = LocalCaptureTransport(input_dir)
 
     async def _execute_pipeline() -> RowResult:
         headers = {"User-Agent": "ReturnsManagerRound3Adapter/1.0"}

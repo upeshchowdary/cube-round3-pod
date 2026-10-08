@@ -25,14 +25,16 @@ def data_dir() -> Path:
     return Path(os.environ.get("DATA_DIR", DEFAULT_DIR))
 
 
-@lru_cache(maxsize=None)
-def _rows(kind: str, directory: str) -> tuple[dict, ...]:
-    with open(Path(directory) / FILES[kind], newline="") as fh:
+@lru_cache(maxsize=64)
+def _rows(kind: str, directory: str, mtime_ns: int, size: int) -> tuple[dict, ...]:
+    with open(Path(directory) / FILES[kind], newline="", encoding="utf-8") as fh:
         return tuple(csv.DictReader(fh))
 
 
 def rows(kind: str) -> tuple[dict, ...]:
-    return _rows(kind, str(data_dir()))
+    # Keyed on the file's mtime and size too, so an edited CSV is re-read (a running API used to serve the old rows).
+    st = (data_dir() / FILES[kind]).stat()
+    return _rows(kind, str(data_dir()), st.st_mtime_ns, st.st_size)
 
 
 def row(kind: str, unit_id: str, org_id: str) -> dict:
