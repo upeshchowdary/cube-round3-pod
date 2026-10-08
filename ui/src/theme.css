@@ -3,7 +3,7 @@
    mint accent, Bricolage Grotesque headings, Figtree body, JetBrains Mono for every id, hash and number.
    Colour carries meaning only: mint = pass/clean, blue = claim, clay = fail/error, amber = uncertain/review. */
 
-.app-shell {
+:root {
   --ink: #0f1f17;
   --ink-2: #2b3a32;
   --muted: #5a6d62;
@@ -28,7 +28,9 @@
   --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
   --radius: 14px;
   --shadow: 0 1px 0 rgba(15, 31, 23, 0.04), 0 8px 24px -16px rgba(15, 31, 23, 0.18);
+}
 
+.app-shell {
   font-family: var(--body);
   color: var(--ink);
   background-color: var(--canvas);
@@ -481,11 +483,20 @@
 .graph-node strong { font-family: var(--mono); font-size: 11.5px; }
 .clickable-node:hover { border-color: var(--mint); }
 
-/* ── Modals and drawer ─────────────────────────────────────────────────── */
-.modal-overlay, .evidence-drawer-overlay { background: rgba(15, 31, 23, 0.36); backdrop-filter: blur(3px); }
-.modal-box, .evidence-drawer { background: var(--paper); border: 1px solid var(--line); box-shadow: 0 30px 80px -30px rgba(15, 31, 23, 0.5); font-family: var(--body); color: var(--ink); }
+.modal-overlay, .evidence-drawer-overlay {
+  background: rgba(15, 31, 23, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.modal-box, .evidence-drawer {
+  background: #ffffff !important;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 25px 70px -15px rgba(15, 31, 23, 0.45), 0 10px 25px -5px rgba(15, 31, 23, 0.2);
+  font-family: var(--body);
+  color: var(--ink);
+}
 .modal-box { border-radius: 18px; animation: ledger-rise 0.25s ease both; }
-.modal-title { font-family: var(--display); font-weight: 700; }
+.modal-title { font-family: var(--display); font-weight: 700; color: var(--ink); }
 .json-viewer { font-size: 11.5px; background: var(--ink); color: #d6efe0; border-radius: 10px; }
 
 /* ── Incidents ─────────────────────────────────────────────────────────── */
