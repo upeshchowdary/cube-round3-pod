@@ -130,13 +130,20 @@ def case_for(unit_id: str, org_id: str, *, route_hint: str | None = None, return
     """The case the orchestrator runs for one unit of this dataset.
 
     Prep, Pack and Returns are already routed by their own rows (route / returned). Receiving and Recovery run for every
-    unit, so when the dataset has no input for them they are listed in `skip_stages` and recorded as skipped with that
-    reason, instead of failing: a unit missing from the Receiving file, or a dataset without a fee report.
+    unit, so when the dataset cannot feed them they are listed in `skip_stages` (with `skip_reasons`) and recorded as
+    skipped instead of failing: a unit missing from the Receiving file, a dataset without a fee report, or a unit
+    without a Receiving row, which Recovery's own tenancy check requires.
     """
     case = {"org_id": org_id, "unit_id": unit_id, "route": route_hint or route(unit_id, org_id),
             "returned": has("returns", unit_id, org_id) if returned is None else returned}
-    skip = [s for s, missing in (("receiving", not has("receiving", unit_id, org_id)),
-                                 ("recovery", not present("fees"))) if missing]
-    if skip:
-        case["skip_stages"] = skip
+    in_receiving = has("receiving", unit_id, org_id)
+    reasons = {}
+    if not in_receiving:
+        reasons["receiving"] = "no receiving input for this unit in the dataset"
+    if not present("fees"):
+        reasons["recovery"] = "no fee report in the dataset"
+    elif not in_receiving:
+        reasons["recovery"] = "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    if reasons:
+        case["skip_stages"], case["skip_reasons"] = list(reasons), reasons
     return case

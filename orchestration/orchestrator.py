@@ -99,7 +99,7 @@ def new_workflow(case: dict, flow: dict) -> dict:
     for step in flow["steps"]:
         ok, why = applies(step, case)
         if ok and step["stage"] in no_input:
-            ok, why = False, f"no {step['stage']} input for this unit in the dataset"
+            ok, why = False, (case.get("skip_reasons") or {}).get(step["stage"]) or f"no {step['stage']} input in the dataset"
         try:
             agent_id = load_manifest(step["stage"])["agent_id"]
         except FileNotFoundError:

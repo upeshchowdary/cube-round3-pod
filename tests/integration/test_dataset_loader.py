@@ -93,7 +93,7 @@ def test_only_a_receiving_file_runs_receiving_and_skips_the_rest_with_reasons(tm
     st = by_stage(wf)
     assert st["receiving"]["state"] == "completed" and st["receiving"]["verdict"] == "PASS"
     assert all(st[s]["state"] == "skipped" for s in ("prep", "pack", "returns", "recovery"))
-    assert "no recovery input" in st["recovery"]["skipped_reason"]
+    assert st["recovery"]["skipped_reason"] == "no fee report in the dataset"
     assert wf["errors"] == [] and wf["status"] == "COMPLETED" and wf["final_outcome"]["outcome"] == "CLEAN"
 
 
@@ -127,6 +127,18 @@ def test_returns_input_from_the_judge_and_photos_from_us(tmp_path):
     assert st["returns"]["state"] == "completed" and st["returns"]["outcome"] == "liquidate"
     rec = FileStore(out / "run").get_evidence(st["returns"]["record_id"])
     assert {i["ref"] for i in rec["inputs"]} == {f"UNIT-0014/returns/{p.name}" for p in photos.iterdir()}
+
+
+def test_fee_lines_without_a_receiving_row_skip_recovery_with_the_reason(tmp_path):
+    """Recovery's own tenancy check needs the unit's Receiving row; without it the stage is a recorded skip, not an
+    error (the agent itself is unchanged)."""
+    rep, out, _ = load(tmp_path, [judge_folder(tmp_path, "UNIT-0014", ["returns", "fees"])])
+    assert rep.errors == []
+    wf = dataset.run(out)[0]
+    st = by_stage(wf)
+    assert st["receiving"]["skipped_reason"] == "no receiving input for this unit in the dataset"
+    assert st["recovery"]["state"] == "skipped" and "Receiving row" in st["recovery"]["skipped_reason"]
+    assert not [e for e in wf["errors"] if e["stage"] == "recovery"]
 
 
 def test_a_new_product_needs_a_category_for_returns(tmp_path):
