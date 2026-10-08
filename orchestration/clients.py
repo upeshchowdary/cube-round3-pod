@@ -27,11 +27,21 @@ def load_manifest(stage: str) -> dict:
     return json.loads((ROOT / "agents" / stage / "agent.json").read_text())
 
 
+class AgentLoadError(Exception):
+    """The agent module could not be imported (e.g. a missing dependency). Recorded as a stage error, not retried."""
+
+
 class InProcClient:
     def __init__(self, manifest: dict):
-        self.handle = importlib.import_module(manifest["module"]).handle
+        # An agent that cannot even be imported must become an error record for its stage, not crash the whole run.
+        try:
+            self.handle, self.load_error = importlib.import_module(manifest["module"]).handle, None
+        except Exception as exc:
+            self.handle, self.load_error = None, f"cannot load {manifest['module']}: {type(exc).__name__}: {exc}"
 
     def run(self, request: dict, timeout_s: float) -> dict:  # timeout is not enforced in-process
+        if self.load_error:
+            raise AgentLoadError(self.load_error)
         try:
             return self.handle(request)
         except LookupError as exc:

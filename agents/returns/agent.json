@@ -5,6 +5,6 @@
   "mode": "inproc",
   "url": "http://127.0.0.1:8104",
   "module": "agents.returns.app",
-  "implementation": "Round 2 Returns Manager pipeline (Gemini vision session + deterministic validation, identity fusion, completeness, Amazon-condition grading and rules engine) behind a Round 3 adapter; replay cassettes in CI, live Gemini on demand",
-  "notes": "Real captures and replay cassettes configured for demo units (UNIT-0016, UNIT-0021, UNIT-0014, UNIT-0038, UNIT-0092, UNIT-0054); all other units fail open as no_return_photo."
+  "implementation": "Round 2 Returns Manager pipeline (Gemini vision session + deterministic validation, identity fusion, completeness, Amazon-condition grading and rules engine) behind a Round 3 adapter. Default replay mode reads cassettes; live/record mode calls Gemini (needs GEMINI_API_KEY).",
+  "notes": "The committed demo captures in data/input/<unit>/returns/ are placeholder images and the 8 committed cassettes are hand-authored (provenance=synthetic, labelled synthetic-cassette in evidence): they exercise the pipeline, rules and hand-offs, not the model. Replace with real photos and record cassettes with agents/returns/tools/record_cassette.py. Units without captures fail open as no_reference_photo."
 }

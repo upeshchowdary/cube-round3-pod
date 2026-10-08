@@ -18,7 +18,9 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_RESULTS_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "run_2.json"
 
-DEFAULT_MODEL_NAME = "meta-llama/llama-3.2-90b-vision-instruct"
+DEFAULT_MODEL_NAME = "meta-llama/llama-3.2-90b-vision-instruct"  # OpenRouter id (the Round 2 benchmark model)
+# Groq does not serve Llama 3.2 Vision; this is its image-capable model. PACK_MODEL_NAME overrides either default.
+GROQ_DEFAULT_MODEL_NAME = "qwen/qwen3.8-27b"
 DEFAULT_PROVIDER = "openrouter"
 VLM_TIMEOUT_S = 6.0
 
@@ -59,7 +61,10 @@ Use this exact JSON shape:
   "status": "complete | uncertain",
   "reason": "string"
 }
-"""
+
+Use status=uncertain whenever the image cannot support a reliable inventory. The
+response describes visual evidence only; do not produce a SEAL or STOP_AND_FIX
+decision here."""
 
 
 def _load_benchmark_results() -> dict[str, dict[str, Any]]:
@@ -122,22 +127,24 @@ def extract_pack_vision(
             },
             "status": "uncertain" if is_uncertain else "complete",
             "reason": reason,
+            # Replay of a recorded Round 2 benchmark answer: no model is called now.
             "model": {
-                "name": DEFAULT_MODEL_NAME,
+                "name": f"{DEFAULT_MODEL_NAME} (recorded)",
                 "version": "2026-10",
-                "provider": "openrouter-replay",
-                "calls": 1,
-                "cost_usd": 0.002,
+                "provider": "replay:run_2.json",
+                "calls": 0,
+                "cost_usd": 0.0,
             },
             "latency_ms": bench.get("latency_ms", 1845),
         }
 
-    # 2. Live VLM API call if API key and image provided
+    # 2. Live VLM API call if API key and image provided (a local capture under data/input/ is sent as a data URL)
+    image_url = _as_url(image_url)
     api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
     if api_key and image_url and (image_url.startswith("http://") or image_url.startswith("https://") or image_url.startswith("data:")):
         endpoint = "https://openrouter.ai/api/v1/chat/completions" if os.environ.get("OPENROUTER_API_KEY") else "https://api.groq.com/openai/v1/chat/completions"
-        model_name = os.environ.get("PACK_MODEL_NAME", DEFAULT_MODEL_NAME)
         provider = "openrouter" if os.environ.get("OPENROUTER_API_KEY") else "groq"
+        model_name = os.environ.get("PACK_MODEL_NAME") or (DEFAULT_MODEL_NAME if provider == "openrouter" else GROQ_DEFAULT_MODEL_NAME)
 
         try:
             payload = {
@@ -160,6 +167,11 @@ def extract_pack_vision(
                     headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                     json=payload,
                 )
+                # Round 2 (verify/route.ts, openrouter.ts) throws on any non-OK response and fails open. Before this
+                # check a 4xx/5xx fell through to the CSV replay below: a failed model call became the operator's
+                # answer, or (for a capture with no CSV row) "nothing in the box" and a false STOP_AND_FIX.
+                if res.status_code != 200:
+                    raise RuntimeError(f"vision request failed (HTTP {res.status_code}): {res.text[:200]}")
                 if res.status_code == 200:
                     raw_content = res.json()["choices"][0]["message"]["content"]
                     parsed = json.loads(raw_content)
@@ -167,7 +179,9 @@ def extract_pack_vision(
                     return {
                         "observations": parsed.get("observations", []),
                         "decoys": parsed.get("decoys", []),
-                        "occlusion": parsed.get("occlusion", {"status": "clear", "details": ""}),
+                        # A model that does not report occlusion has not shown the box is clear (Round 2 treated a
+                        # missing value as not clear, which makes the verdict UNCERTAIN).
+                        "occlusion": parsed.get("occlusion") or {"status": "not_reported", "details": "model did not report occlusion"},
                         "status": parsed.get("status", "complete"),
                         "reason": parsed.get("reason", ""),
                         "model": {
@@ -175,7 +189,7 @@ def extract_pack_vision(
                             "version": "2026-10",
                             "provider": provider,
                             "calls": 1,
-                            "cost_usd": 0.003,
+                            "cost_usd": None,  # not measured; token usage is in the provider response
                         },
                         "latency_ms": latency_ms,
                     }
@@ -198,17 +212,18 @@ def extract_pack_vision(
                 "latency_ms": latency_ms,
             }
 
-    # 3. Fallback for sample data replay (data/sample/pack_sample.csv)
+    # 3. Fallback for sample data replay (data/sample/pack_sample.csv): the operator-recorded box contents.
+    #    No image is examined and no model is called.
     from agents.pack.adapter.engine import parse_order_lines
     observed_items = parse_order_lines(sample_observed_text or "")
-    latency_ms = int((time.perf_counter() - t0) * 1000) or 15
+    latency_ms = int((time.perf_counter() - t0) * 1000)
 
     return {
         "observations": [
             {
                 "sku": it["sku"],
                 "quantity": it["quantity"],
-                "confidence": 0.98,
+                "confidence": None,
                 "evidenceRef": "sample:observed_in_box",
             }
             for it in observed_items
@@ -216,14 +231,29 @@ def extract_pack_vision(
         "decoys": [],
         "occlusion": {"status": "clear", "details": ""},
         "status": "complete",
-        "reason": "Derived from carton observation record",
+        "reason": "Replayed from the sample CSV observed_in_box column (no vision run)",
         "model": {
-            "name": "meta-llama/llama-3.2-90b-vision-instruct",
-            "version": "2026-10",
-            "provider": "pack-reconciliation-adapter",
-            "calls": 1,
-            "cost_usd": 0.001,
+            "name": "csv-replay",
+            "version": "pack-r2-replay",
+            "provider": None,
+            "calls": 0,
+            "cost_usd": 0.0,
         },
         "latency_ms": latency_ms,
     }
+
+
+_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+def _as_url(ref: str | None) -> str | None:
+    """A relative capture ref under INPUT_DIR becomes a base64 data URL; anything else is returned unchanged."""
+    if not ref or ref.startswith(("http://", "https://", "data:")):
+        return ref
+    root = Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input")).resolve()
+    path = (root / ref).resolve()
+    if not path.is_relative_to(root) or not path.is_file() or path.suffix.lower() not in _MIME:
+        return ref
+    import base64
+    return f"data:{_MIME[path.suffix.lower()]};base64,{base64.b64encode(path.read_bytes()).decode()}"
 

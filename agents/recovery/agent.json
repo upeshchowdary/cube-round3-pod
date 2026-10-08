@@ -4,8 +4,8 @@
   "agent_id": "recovery-vishruth@1",
   "owner": "@vishruth-16",
   "mode": "inproc",
-  "url": "http://localhost:8105",
+  "url": "http://127.0.0.1:8105",
   "module": "agents.recovery.app",
-  "implementation": "FBA fee reconciliation engine enforcing tenancy isolation and tri-state audits via Gemini.",
-  "description": "FBA fee reconciliation engine enforcing tenancy isolation and tri-state audits via Gemini."
+  "implementation": "Round 2 tri-state fee audit: deterministic rules per charge type against upstream evidence (default, no model call); optional one batched Gemini call per unit (RECOVERY_MODEL_MODE=live) for charge types no rule covers.",
+  "description": "Reads the fee report lines for a unit and every earlier evidence record; CONTRADICTS = claim with cited records, SUPPORTS = no claim, SILENT = never claimed."
 }

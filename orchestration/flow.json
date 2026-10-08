@@ -1,6 +1,6 @@
 {
   "flow_id": "standard-v1",
-  "description": "Receiving -> Prep (FBA units) | Pack (merchant-fulfilled units) -> Returns (if a return happened) -> Recovery. Edit freely: the order, conditions and policies are yours. Record every change in docs/decisions.md.",
+  "description": "Receiving -> Prep (FBA units) | Pack (merchant-fulfilled units) -> Returns (if a return happened) -> Recovery. Returns and Recovery judge with upstream evidence, so resume re-runs them when that evidence or an override of it changed after they ran (D-012). Record every change in docs/decisions.md.",
   "steps": [
     {
       "stage": "receiving"
@@ -27,10 +27,12 @@
           true
         ]
       },
-      "stage": "returns"
+      "stage": "returns",
+      "rerun_when_upstream_changes": true
     },
     {
-      "stage": "recovery"
+      "stage": "recovery",
+      "rerun_when_upstream_changes": true
     }
   ],
   "defaults": {

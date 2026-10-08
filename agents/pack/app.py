@@ -93,36 +93,45 @@ def handle(request: dict) -> dict:
     extra_labels = [e["sku"] for e in extras]
 
     is_uncertain = verdict == "UNCERTAIN"
-    uncertain_reason = reconciliation["reason"] if is_uncertain else None
+    # The contract allows only coded reasons; the engine's text goes into `detail`.
+    uncertain_reason = "occluded" if is_uncertain else None
+    unc_detail = f"uncertain: {reconciliation['reason']}"
+    # A CSV replay is deterministic: no model confidence to report.
+    replay = extracted.get("model", {}).get("name") == "csv-replay"
+
+    def conf(bad: bool) -> float | None:
+        if replay:
+            return None
+        return 0.50 if is_uncertain else (0.95 if bad else 0.98)
 
     checks = [
         check(
             "items_present",
             "UNCERTAIN" if is_uncertain else ("FAIL" if missing else "PASS"),
-            0.50 if is_uncertain else (0.95 if missing else 0.98),
+            conf(bool(missing)),
             expected=sorted(expected_agg.keys()),
             observed=sorted(observed_agg.keys()),
-            detail=f"missing: {missing}" if missing else "all expected items accounted for",
+            detail=unc_detail if is_uncertain else (f"missing: {missing}" if missing else "all expected items accounted for"),
             evidence_refs=evidence_refs,
             uncertain_reason=uncertain_reason,
         ),
         check(
             "quantities_correct",
             "UNCERTAIN" if is_uncertain else ("FAIL" if mismatches else "PASS"),
-            0.50 if is_uncertain else (0.95 if mismatches else 0.98),
+            conf(bool(mismatches)),
             expected=expected_agg,
             observed={k: observed_agg.get(k, 0) for k in expected_agg},
-            detail=f"mismatches: {mismatches}" if mismatches else "quantities match expected counts",
+            detail=unc_detail if is_uncertain else (f"mismatches: {mismatches}" if mismatches else "quantities match expected counts"),
             evidence_refs=evidence_refs,
             uncertain_reason=uncertain_reason,
         ),
         check(
             "no_extra_items",
             "UNCERTAIN" if is_uncertain else ("FAIL" if extras else "PASS"),
-            0.50 if is_uncertain else (0.95 if extras else 0.98),
+            conf(bool(extras)),
             expected=[],
             observed=extra_labels,
-            detail=f"unexpected: {extras}" if extras else "no extra items or decoys found",
+            detail=unc_detail if is_uncertain else (f"unexpected: {extras}" if extras else "no extra items or decoys found"),
             evidence_refs=evidence_refs,
             uncertain_reason=uncertain_reason,
         ),

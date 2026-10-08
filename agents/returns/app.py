@@ -185,8 +185,15 @@ def handle(request: dict) -> dict:
                               retryable=False, agent_id=AGENT_ID)
 
     cassette_sha256: str | None = None
+    cassette_provenance: str | None = None
     if cassette_path and cassette_path.is_file():
-        cassette_sha256 = hashlib.sha256(cassette_path.read_bytes()).hexdigest()
+        cassette_bytes = cassette_path.read_bytes()
+        cassette_sha256 = hashlib.sha256(cassette_bytes).hexdigest()
+        first = next((ln for ln in cassette_bytes.decode("utf-8").splitlines() if ln.strip()), "")
+        try:
+            cassette_provenance = json.loads(first).get("provenance") if first else None
+        except ValueError:
+            cassette_provenance = None
 
     # Quota guard
     max_requests = int(os.environ.get("RETURNS_MAX_REQUESTS", "6"))
@@ -292,6 +299,7 @@ def handle(request: dict) -> dict:
         agent_id=AGENT_ID,
         model_mode=mode,
         cassette_sha256=cassette_sha256,
+        cassette_provenance=cassette_provenance,
         prompt_version=PROMPT_VERSION,
         model_name=settings.rm_judgment_model,
         model_version=settings.rm_judgment_model,

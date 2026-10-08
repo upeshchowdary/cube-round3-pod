@@ -33,7 +33,7 @@ never a guessed verdict.
 
 | Mode | What runs | `model.calls` |
 |---|---|---|
-| `replay` (default, CI) | recorded Gemini responses from `cassettes/<org>/<unit>.jsonl`; cassette hash in `payload.cassette_sha256` | 0 (`payload.recorded_calls` = 1) |
+| `replay` (default, CI) | Gemini-format responses from `cassettes/<org>/<unit>.jsonl`; cassette hash in `payload.cassette_sha256`. The 8 committed cassettes are **hand-authored** (`provenance: synthetic`) over placeholder captures, and evidence names the model `synthetic-cassette (hand-authored, no model run)`; a cassette written by `record` mode is labelled `<model> (recorded)` | 0 (`payload.recorded_calls` = 1) |
 | `live` | the real Gemini call (`GEMINI_API_KEY` required) | measured |
 | `record` | live, and writes a new cassette | measured |
 

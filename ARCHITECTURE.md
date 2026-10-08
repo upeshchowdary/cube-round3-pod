@@ -116,15 +116,78 @@ Every failure is **recorded and never becomes success**: a degraded evidence rec
 
 ---
 
-## Your Pod's architecture  ← **replace this section**
+## Pod 05 architecture
 
-_Delete this note and describe **your** system. At minimum:_
+### 1. Components and flow
 
-1. **Diagram** of your actual components and flow, including anything you added.
-2. **What each agent really is**: model, rules, services, dependencies; which are still stubs.
-3. **Your orchestrator**: approach, how workflow state is stored, retries, how evidence is persisted, how overrides work (link the decisions in `docs/decisions.md`).
-4. **Your routing and final-outcome logic**, and how they treat uncertainty and weak evidence.
-5. **Tenancy**: where it is enforced, and how you tested it.
-6. **Failure model**: what you break in the demo and what happens.
-7. **Deployment**: where it runs, how to reach it, how to start it.
-8. **Known limits.**
+```text
+ UI (React, ui/)  ──/api──▶  Orchestrator API (FastAPI, orchestration/api.py :8100)
+                                   │  404 for unknown / wrong-tenant subjects (no workflow created)
+                                   ▼
+                        Orchestrator (orchestration/orchestrator.py)  ──▶  FileStore out/workflows, out/evidence
+                                   │ route by case: route = fba | mfn, returned = true | false
+   ┌───────────────┬───────────────┴───────────────┬─────────────────┬───────────────────┐
+   ▼               ▼ (fba)                         ▼ (mfn)           ▼ (returned)        ▼
+ Receiving  ──▶  Prep  ─────────────────────or──▶ Pack ─────────▶  Returns  ─────────▶  Recovery
+ PO-line checks   6 prep rules                    box vs order     identity, parts,     fee lines vs all
+                                                                   grade, disposition   earlier evidence
+   each agent: in-process handle(request) (default) or HTTP /run; every one gets ALL previous evidence + overrides
+```
+
+### 2. What each agent really is
+
+| Agent (owner) | Default mode (no keys) | Live mode | Status |
+|---|---|---|---|
+| Receiving (@KiranTejz20005) | Round 2 deterministic decision engine over the CSV operator observations; `model.name = csv-replay` | `RECEIVING_MODEL_MODE=live` + `GEMINI_API_KEY`: one Gemini 2.5 Flash call over the receiving captures | integrated; no receiving captures committed |
+| Prep (@mdsuhana231-gif) | deterministic rules over recorded prep observations; `rules` | none (no vision): captures without observations are UNCERTAIN | integrated |
+| Pack (@nikhilagarwal03) | reconciliation engine over the CSV `observed_in_box`; `csv-replay` | `OPENROUTER_API_KEY` (Llama 3.2 90B Vision) or `GROQ_API_KEY` (`qwen/qwen3.8-27b`): one call per box, 6 s fail-open | integrated; live path tested once via Groq |
+| Returns (@upeshchowdary) | Round 2 pipeline over cassettes. The 8 committed cassettes are hand-authored over placeholder images: `synthetic-cassette (hand-authored, no model run)` | `RETURNS_MODEL_MODE=live|record` + `GEMINI_API_KEY` | integrated; needs real photos + recorded cassettes |
+| Recovery (@vishruth-16) | deterministic rules per charge type against upstream evidence; `rules` | `RECOVERY_MODEL_MODE=live`: one batched Gemini call for charge types no rule covers; a model claim must cite a real record | integrated |
+
+No organiser stub remains in the flow. Every record's `model` says what actually ran (D-013, D-015).
+
+### 3. Orchestrator
+
+The organiser's engine, kept: it owns workflow state; agents only return evidence. Each stage gets the subject, its
+captures (`data/input/<unit>/<stage>/`, sha256-hashed), every earlier evidence record and the workflow's overrides.
+Outputs are validated (schema, stage, workflow, tenant, content hash, output/evidence agreement) before they are
+stored. State and evidence are JSON files under `out/` (atomic writes), so a restart resumes where it stopped. Retries:
+1 for timeouts / unavailable agents, never for refusals. Evidence is immutable: reusing a `record_id` for different
+content is rejected (D-012). Overrides are workflow entries that reference a record and the previous effective verdict
+(D-004); downstream agents read the effective verdict. Returns and Recovery are re-run on `resume` when their upstream
+evidence or an override of it changed after they ran (D-012). An agent that cannot even be imported becomes an error
+record for its stage (D-014).
+
+### 4. Routing and final outcome
+
+`orchestration/flow.json`: Receiving always; Prep for `fba`; Pack for `mfn`; Returns if the unit came back; Recovery
+always. `on_uncertain: continue`, `on_error: continue` (D-002, D-003), so Recovery always sees what exists. Status
+precedence (rollup.py): any stage in error → FAILED; FAIL with no Recovery → RECOVERY_REQUIRED; UNCERTAIN that asks for
+a person → BLOCKED; else COMPLETED. Weak evidence never becomes a claim: Recovery claims only CONTRADICTS lines with
+a cited record; SILENT lines are listed and never claimed (D-005, D-007, D-010).
+
+### 5. Tenancy
+
+Enforced three times: the API refuses subjects unknown to the org (404, nothing stored); every agent looks its subject
+up scoped by `org_id` and raises → `agent_rejected`; the orchestrator rejects any output whose evidence names another
+org or subject. Tested in `tests/integration/test_agent_contracts.py`, `tests/e2e/test_http.py`, `tests/e2e/test_api.py`;
+200/200 cross-org requests refused in the evaluation run.
+
+### 6. Failure model (demo)
+
+Kill an agent (stop its HTTP server, or `ORCH_MODE=http` with one URL down): its stage becomes a recorded error, the
+rest of the flow still runs, the workflow is FAILED with a provisional INCOMPLETE outcome, never a success; `resume`
+after restarting it re-runs the stage and the downstream judges. Numbers: `docs/evaluation.md`.
+
+### 7. Deployment
+
+Local: `make setup` (or `python -m venv .venv && pip install -r requirements.txt`), `uvicorn orchestration.api:app --port 8100`,
+`cd ui && npm ci && npm run dev` (Vite proxies `/api` to `ORCH_API_URL`, default `http://localhost:8100`). Agents run
+in-process by default; each can run alone with `uvicorn agents.<stage>.app:app --port 810N`. No authentication: do not
+expose the API publicly as is.
+
+### 8. Known limits
+
+No real captures are committed; Returns' demo cassettes are synthetic; Receiving and Pack replay CSV observations by
+default; Prep has no vision; live Gemini modes were not run (no key); no held-out labelled evaluation. See
+`docs/evaluation.md`.

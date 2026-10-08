@@ -1,234 +1,139 @@
 """Recovery Manager: agent entry point.
-Integrated with Gemini-powered Tri-State FBA Audit Engine from Round 2.
+
+Round 2 tri-state fee audit (Vishruth) behind the Round 3 contract. Recovery has no camera: each fee line is a
+check whose condition is "this charge is supported by evidence".
+    FAIL      = CONTRADICTS  -> claim, cites the upstream record(s)
+    PASS      = SUPPORTS     -> no claim
+    UNCERTAIN = SILENT       -> never claimed; listed in payload.unclaimable with the reason
+
+Default mode is deterministic rules (no model call, model.name = "rules"). RECOVERY_MODEL_MODE=live adds ONE
+batched Gemini call per unit (google-genai) for fee lines no explicit rule covers. A model answer can only turn a
+line into a claim if it cites an upstream record that actually exists; any model failure falls back to the rules
+and is recorded in payload.model_fallback. Run:  uvicorn agents.recovery.app:app --port 8105
 """
-import os
+from __future__ import annotations
+
 import json
-import uuid
-import hashlib
-from datetime import datetime
-from pydantic import BaseModel
-import google.generativeai as genai
+import os
 
 from shared.utils import sample_data
 from shared.utils.records import build_output, build_record, check, utcnow
 from shared.utils.server import make_app
-from shared.utils.stubs import STUB_MODEL, effective_verdict, previous
+from shared.utils.stubs import effective_verdict, previous
 
 STAGE = "recovery"
 AGENT_ID = "recovery-vishruth@1"
-MODEL_NAME = "gemini-1.5-flash"
-MODEL_INFO = {"name": "gemini-1.5-flash", "version": "1.5", "provider": "google"}
+RULES_MODEL = {"name": "rules", "version": "recovery-rules-2", "provider": None, "calls": 0, "cost_usd": 0.0}
+LIVE_MODEL_NAME = os.environ.get("RECOVERY_MODEL", "gemini-2.5-flash")
+# Lines on these reports are credits paid to the seller, not charges to dispute.
+CREDIT_REPORTS = {"reimbursement_report"}
 
-# Configure Gemini (Pulls from pod's environment variables)
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
-# ── Authoritative Amazon FBA constants (not model memory) ─────────────────────
-FBA_CLAIM_WINDOW_DAYS = 60
+def _completed(record: dict | None) -> bool:
+    return bool(record) and record.get("status") == "completed"
 
-class RecoveryEvidenceRecord(BaseModel):
-    record_id: str
-    organization_id: str
-    outcome: dict
-    status: str
-    content_hash: str = ""
 
-    def compute_hash(self) -> str:
-        serialized = json.dumps(
-            {"record_id": self.record_id, "outcome": self.outcome},
-            sort_keys=True
-        )
-        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-
-class RecoveryAuditEngine:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        if not api_key:
-            self.model = None
-            return
-        try:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(
-                MODEL_NAME,
-                generation_config={
-                    "response_mime_type": "application/json",
-                    "temperature": 0.0,
-                }
-            )
-        except Exception:
-            self.model = None
-
-    def audit_charge(self, org_id: str, fee_row: dict, evidence_records: list, compliance_rule: str = "") -> RecoveryEvidenceRecord:
-        record_id = f"REC-AUDIT-{uuid.uuid4().hex[:8].upper()}"
-        try:
-            return self._run_audit(record_id, org_id, fee_row, evidence_records, compliance_rule)
-        except Exception as exc:
-            outcome = {
-                "assessment": "UNCERTAIN",
-                "decision": "PENDING_REVIEW",
-                "recoverable_amount": 0.0,
-                "reason": f"SYSTEM ERROR: {type(exc).__name__}: {exc}. Queued for manual adjudication.",
-                "rule_cited": "Fail-Open Safety Protocol",
-                "supporting_evidence": [],
-            }
-            rec = RecoveryEvidenceRecord(record_id=record_id, organization_id=org_id, outcome=outcome, status="ERROR_PENDING_REVIEW")
-            rec.content_hash = rec.compute_hash()
-            return rec
-
-    def _run_audit(self, record_id: str, org_id: str, fee_row: dict, evidence_records: list, compliance_rule: str) -> RecoveryEvidenceRecord:
-        amount = float(fee_row.get("amount_usd", 0.0) or fee_row.get("amount", 0.0))
-        days = int(fee_row.get("days_since_event", 14) or 14)
-
-        for ev in evidence_records:
-            ev_org = ev.get("org_id", org_id)
-            if ev_org != org_id:
-                return self._build_rec(record_id, org_id, "SILENT", "NOT_SUPPORTED", 0.0, "TENANCY VIOLATION: Cross-tenant evidence.", "REJECTED_TENANCY")
-
-        if fee_row.get("is_duplicate"):
-            return self._build_rec(record_id, org_id, "DUPLICATE_CHARGE", "CLAIM_APPROVED", amount, "DUPLICATE TRANSACTION DETECTED.", "COMPLETED")
-
-        if fee_row.get("already_reimbursed") or fee_row.get("reimbursement_id"):
-            return self._build_rec(record_id, org_id, "ALREADY_REIMBURSED", "NOT_SUPPORTED", 0.0, "SUPPRESSED — ALREADY REIMBURSED.", "COMPLETED")
-
-        if days > FBA_CLAIM_WINDOW_DAYS:
-            return self._build_rec(record_id, org_id, "SILENT", "NOT_SUPPORTED", 0.0, f"TIME EXPIRED: >{FBA_CLAIM_WINDOW_DAYS} days.", "COMPLETED")
-
-        if not evidence_records:
-            return self._build_rec(record_id, org_id, "SILENT", "NOT_SUPPORTED", 0.0, "SILENT — insufficient evidence.", "COMPLETED")
-
-        if self.model:
-            try:
-                ai_result = self._ai_evaluate(fee_row, evidence_records, compliance_rule)
-                rec = RecoveryEvidenceRecord(record_id=record_id, organization_id=org_id, outcome=ai_result, status="COMPLETED")
-                rec.content_hash = rec.compute_hash()
-                return rec
-            except Exception:
-                pass 
-
-        return self._deterministic_audit(record_id, org_id, fee_row, evidence_records, compliance_rule)
-
-    def _build_rec(self, rid, oid, ass, dec, amt, rsn, stat):
-        outcome = {"assessment": ass, "decision": dec, "recoverable_amount": amt, "reason": rsn, "supporting_evidence": []}
-        rec = RecoveryEvidenceRecord(record_id=rid, organization_id=oid, outcome=outcome, status=stat)
-        rec.content_hash = rec.compute_hash()
-        return rec
-
-    def _ai_evaluate(self, fee_row: dict, evidence_records: list, compliance_rule: str) -> dict:
-        amount = float(fee_row.get("amount_usd", 0.0) or fee_row.get("amount", 0.0))
-        system_prompt = f"""You are an AI Recovery Manager for Amazon FBA dispute reconciliation.
-Track 05 — Cube Buildathon. Structured evidence-based reasoning ONLY.
-Look at the evidence records' compliance_status.
-A) If compliance_status == "FAIL": assessment="SUPPORTS", decision="NOT_SUPPORTED", recoverable_amount=0.0
-B) If compliance_status == "PASS": assessment="CONTRADICTED", decision="CLAIM_APPROVED", recoverable_amount={amount}
-C) If "UNCERTAIN": assessment="SILENT", decision="NEEDS_MANUAL_REVIEW", recoverable_amount=0.0
-Do NOT return CONTRADICTED when evidence shows FAIL.
-Do NOT return SUPPORTS when evidence shows PASS.
-OUTPUT FORMAT: JSON with keys: assessment, decision, recoverable_amount, reason, rule_cited, supporting_evidence"""
-        user_prompt = f"FEE REPORT:\n{json.dumps(fee_row)}\nEVIDENCE:\n{json.dumps(evidence_records)}"
-        response = self.model.generate_content(system_prompt + "\n\n" + user_prompt)
-        return json.loads(response.text.strip())
-
-    def _deterministic_audit(self, record_id: str, org_id: str, fee_row: dict, evidence_records: list, compliance_rule: str) -> RecoveryEvidenceRecord:
-        amount = float(fee_row.get("amount_usd", 0.0) or fee_row.get("amount", 0.0))
-        ev = evidence_records[0] if evidence_records else {}
-        stat = str(ev.get("compliance_status", "")).upper()
-        if "FAIL" in stat:
-            return self._build_rec(record_id, org_id, "SUPPORTS", "NOT_SUPPORTED", 0.0, "Warehouse evidence confirms defect.", "COMPLETED")
-        elif "PASS" in stat:
-            return self._build_rec(record_id, org_id, "CONTRADICTED", "CLAIM_APPROVED", amount, "Record proves unit was COMPLIANT.", "COMPLETED")
-        return self._build_rec(record_id, org_id, "SILENT", "NOT_SUPPORTED", 0.0, "Ambiguous or partial evidence.", "COMPLETED")
-
-# Instantiate the engine globally for the module
-audit_engine = RecoveryAuditEngine(api_key=os.environ.get("GEMINI_API_KEY", ""))
-
-def position(line: dict, request: dict) -> tuple[str, str, list[str]]:
-    """(CONTRADICTS | SUPPORTS | SILENT, detail, evidence record ids)."""
+def position(line: dict, request: dict) -> tuple[str | None, str, list[str]]:
+    """(CONTRADICTS | SUPPORTS | SILENT | None, reason, upstream record ids). None = no explicit rule covers it."""
     ctype = line["charge_type"]
-    org_id = request["subject"]["org_id"]
-    
-    # Adhere to Round 3 explicit finding rules
+
+    if line.get("report_type") in CREDIT_REPORTS or ctype == "damaged_in_warehouse":
+        return "SILENT", "reimbursement credit to the seller, not a charge to dispute", []
     if ctype == "fulfilment_fee_weight_tier":
+        prep = previous(request, "prep")
+        if _completed(prep) and (prep.get("payload") or {}).get("measurements"):
+            return ("SILENT", "Prep measured the unit but no fee schedule is looked up to compare the tier (finding F-07)",
+                    [prep["record_id"]])
         return "SILENT", "no measured weight/dimensions upstream (finding F-07)", []
     if ctype == "lost_inbound":
         return "SILENT", "receiving shortfall is supplier-side, not channel-side loss (finding F-10)", []
 
-    ret = previous(request, "returns")
     if ctype == "refund_issued_item_not_returned":
-        # Resolution of Finding F-11:
-        if ret and ret.get("status") == "completed":
-            ret_verdict = ret.get("decision", {}).get("verdict", "")
-            disposition = ret.get("decision", {}).get("outcome", "unknown")
-            if ret_verdict == "PASS" or disposition in ("restock", "liquidate"):
-                return "CONTRADICTS", f"Returns evidence ({ret['record_id']}) proves item returned with disposition '{disposition}' (finding F-11)", [ret["record_id"]]
-            return "SILENT", f"Returns evidence ({ret['record_id']}) is {ret_verdict} / unverified (finding F-11)", [ret["record_id"]]
-        return "SILENT", "no seller-side return record to contradict refund (finding F-11)", []
+        # D-007 (our assumption on finding F-11): a seller-side Returns record that physically verified the unit
+        # and routed it contradicts "item not returned".
+        ret = previous(request, "returns")
+        if not _completed(ret):
+            return "SILENT", "no seller-side return record to contradict the refund (finding F-11)", []
+        verdict = effective_verdict(request, ret)
+        disposition = ret["decision"].get("outcome", "unknown")
+        identity = next((c["verdict"] for c in ret.get("checks", []) if c["check_key"] == "identity_match"), None)
+        # A wrong item coming back does not contradict "item not returned": require a verified identity.
+        if verdict == "PASS" or (identity == "PASS" and disposition in ("restock", "refurbish", "liquidate")):
+            return ("CONTRADICTS", f"Returns record {ret['record_id']} shows the item came back "
+                    f"(verdict {verdict}, disposition {disposition}) (finding F-11, D-007)", [ret["record_id"]])
+        return "SILENT", f"Returns record {ret['record_id']} is {verdict} / {disposition}: receipt not verified (finding F-11)", [ret["record_id"]]
 
-    prep = previous(request, "prep")
-    rcv = previous(request, "receiving")
     if ctype == "inbound_defect_fee":
-        if prep and prep.get("status") == "completed":
-            stat = effective_verdict(request, prep)
-            if stat == "PASS":
-                return "CONTRADICTS", "Prep evidence shows the unit compliant", [prep["record_id"]]
-            elif stat == "FAIL":
-                return "SUPPORTS", "Prep evidence confirms defect", [prep["record_id"]]
-            return "SILENT", "Prep evidence is uncertain", [prep["record_id"]]
-        if rcv and rcv.get("status") == "completed":
-            stat = effective_verdict(request, rcv)
-            if stat == "PASS":
-                return "CONTRADICTS", "Receiving evidence shows the unit compliant", [rcv["record_id"]]
-            elif stat == "FAIL":
-                return "SUPPORTS", "Receiving evidence confirms inbound defect", [rcv["record_id"]]
-            return "SILENT", "Receiving evidence is uncertain", [rcv["record_id"]]
+        for stage in ("prep", "receiving"):
+            rec = previous(request, stage)
+            if not _completed(rec):
+                continue
+            verdict = effective_verdict(request, rec)
+            if verdict == "PASS":
+                return "CONTRADICTS", f"{stage.title()} evidence {rec['record_id']} shows the unit compliant", [rec["record_id"]]
+            if verdict == "FAIL":
+                return "SUPPORTS", f"{stage.title()} evidence {rec['record_id']} confirms a defect", [rec["record_id"]]
+            return "SILENT", f"{stage.title()} evidence {rec['record_id']} is uncertain", [rec["record_id"]]
+        return "SILENT", "no Prep or Receiving evidence for this unit (Specialist Pods: no Prep)", []
 
-    # Map upstream records into our engine's standard evidence format
-    evidence_records = []
-    if prep and prep.get("status") == "completed":
-        prep_ev = dict(prep)
-        prep_ev["source_manager"] = "prep"
-        prep_ev["compliance_status"] = effective_verdict(request, prep)
-        evidence_records.append(prep_ev)
-        
-    if ret and ret.get("status") == "completed":
-        ret_ev = dict(ret)
-        ret_ev["source_manager"] = "returns"
-        if ret.get("checks"):
-            ret_ev["compliance_status"] = ret["checks"][0].get("verdict", "UNCERTAIN")
-        evidence_records.append(ret_ev)
+    return None, "", []
 
-    # Trigger the Round 2 AI Engine!
-    rec = audit_engine.audit_charge(org_id=org_id, fee_row=line, evidence_records=evidence_records)
-    
-    # Map the engine's rich assessment back into the exact Tri-State string expected by the stub
-    pos = rec.outcome.get("assessment", "SILENT")
-    if pos in ("DUPLICATE_CHARGE", "CONTRADICTED", "CONTRADICTS"):
-        pos = "CONTRADICTS"
-    elif pos in ("ALREADY_REIMBURSED", "UNCERTAIN"):
-        pos = "SILENT"
-        
-    why = rec.outcome.get("reason", "Evaluated by AI Engine")
-    ids = [ev["record_id"] for ev in evidence_records if ev.get("record_id")]
-    
-    return pos, why, ids
+
+def _live_audit(lines: list[dict], request: dict) -> tuple[dict[str, tuple[str, str, list[str]]], dict]:
+    """One batched Gemini call for every line no rule covers. Returns ({line_id: position}, model meta)."""
+    from google import genai
+    from google.genai import types
+
+    upstream = {r["record_id"]: {"stage": r["stage"], "verdict": effective_verdict(request, r),
+                                 "outcome": r["decision"].get("outcome"), "reason": r["decision"].get("reason")}
+                for r in request.get("previous_evidence", []) if r.get("status") == "completed"}
+    prompt = (
+        "You audit marketplace fee lines against warehouse evidence records. For EACH line answer with one of "
+        "CONTRADICTS (the evidence shows the charge is wrong), SUPPORTS (the evidence confirms it) or SILENT (the "
+        "evidence does not speak to it). Only cite record_ids from EVIDENCE. If unsure, answer SILENT.\n"
+        'Reply as JSON: {"lines": [{"line_id": str, "position": str, "reason": str, "record_ids": [str]}]}\n'
+        f"FEE LINES: {json.dumps(lines)}\nEVIDENCE: {json.dumps(upstream)}")
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    resp = client.models.generate_content(model=LIVE_MODEL_NAME, contents=prompt,
+                                          config=types.GenerateContentConfig(response_mime_type="application/json"))
+    out: dict[str, tuple[str, str, list[str]]] = {}
+    for item in json.loads(resp.text or "{}").get("lines", []):
+        ids = [i for i in item.get("record_ids", []) if i in upstream]
+        pos = item.get("position", "SILENT")
+        if pos not in ("CONTRADICTS", "SUPPORTS", "SILENT") or (pos == "CONTRADICTS" and not ids):
+            pos = "SILENT"  # a claim must cite real upstream evidence
+        out[item.get("line_id", "")] = (pos, f"model: {item.get('reason', '')}", ids)
+    meta = {"name": LIVE_MODEL_NAME, "version": LIVE_MODEL_NAME, "provider": "google", "prompt_version": "recovery-v2",
+            "calls": 1, "cost_usd": None}
+    return out, meta
 
 
 def handle(request: dict) -> dict:
     s = request["subject"]
-    
-    # Tenancy Guardrail
-    if not sample_data.has("receiving", s["subject_id"], s["org_id"]):
+    if not sample_data.has("receiving", s["subject_id"], s["org_id"]):  # tenancy: never answer for another org
         raise LookupError(f"unknown subject {s['subject_id']} in {s['org_id']}")
 
     lines = sample_data.fee_lines(s["subject_id"], s["org_id"])
+    decided = {line["line_id"]: position(line, request) for line in lines}
+    open_lines = [line for line in lines if decided[line["line_id"]][0] is None]
+
+    model, fallback = RULES_MODEL, None
+    if open_lines and os.environ.get("RECOVERY_MODEL_MODE") == "live" and os.environ.get("GEMINI_API_KEY"):
+        try:
+            answers, model = _live_audit(open_lines, request)
+            decided.update({lid: answers[lid] for lid in answers if lid in decided})
+        except Exception as exc:  # fail open to the rules, and say so
+            fallback = f"{type(exc).__name__}: {str(exc)[:200]}"
+    for lid, (pos, _, _) in list(decided.items()):
+        if pos is None:
+            decided[lid] = ("SILENT", "no rule maps this charge type to upstream evidence", [])
+
     checks, charges, claimable = [], [], 0.0
-    
-    # Organizer's required strict output formatting loop
     for line in lines:
-        pos, why, ids = position(line, request)
+        pos, why, ids = decided[line["line_id"]]
         amount = float(line["amount_usd"])
-        
         if pos == "CONTRADICTS" and amount <= 0:
-            pos, why = "SILENT", "amount is 0.00: nothing to claim, or the amount is missing (finding F-09)"
-            
+            pos, why = "SILENT", f"{why}; but amount is 0.00: nothing to claim, or the amount is missing (finding F-09)"
         verdict = {"CONTRADICTS": "FAIL", "SUPPORTS": "PASS", "SILENT": "UNCERTAIN"}[pos]
         checks.append(check(f"charge_{line['line_id'].lower().replace('-', '_')}", verdict, None,
                             expected="charge supported by evidence", observed=pos, detail=why,
@@ -237,21 +142,29 @@ def handle(request: dict) -> dict:
             claimable += amount
         charges.append({"line_id": line["line_id"], "charge_type": line["charge_type"], "amount_usd": amount,
                         "position": pos, "reason": why, "evidence_record_ids": ids})
-                        
-    claim = any(c["position"] == "CONTRADICTS" for c in charges)
+
+    n_claim = sum(c["position"] == "CONTRADICTS" for c in charges)
     silent = any(c["position"] == "SILENT" for c in charges)
-    verdict = "FAIL" if claim else ("UNCERTAIN" if silent else "PASS")
-    outcome = "claim_recommended" if claim else ("insufficient_evidence" if silent else "no_claim")
-    
+    verdict = "FAIL" if n_claim else ("UNCERTAIN" if silent else "PASS")
+    outcome = "claim_recommended" if n_claim else ("insufficient_evidence" if silent else "no_claim")
+    payload = {"charges": charges, "claimable_usd": round(claimable, 2),
+               "unclaimable": [c for c in charges if c["position"] != "CONTRADICTS"]}
+    if fallback:
+        payload["model_fallback"] = fallback
+    # Same request in, same record_id out; a re-run (request_id ends ":rN") is a new record, never an overwrite.
+    rerun = request["request_id"].rsplit(":", 1)[-1]
+    record_id = f"RCY-{s['subject_id']}" + (f"-{rerun}" if rerun.startswith("r") and rerun[1:].isdigit() else "")
     record = build_record(
-        request, agent_id=AGENT_ID, record_id=f"RCY-{s['subject_id']}", model=MODEL_INFO,
-        captured_at=max((l["posted_date"] + "T00:00:00Z" for l in lines), default=utcnow()),
+        request, agent_id=AGENT_ID, record_id=record_id, model=model,
+        captured_at=max((line["posted_date"] + "T00:00:00Z" for line in lines), default=utcnow()),
+        refs={"sku": lines[0]["sku"], "fnsku": lines[0]["fnsku"]} if lines else None,
         checks=checks, outcome=outcome, verdict=verdict,
-        needs_human=False,
-        reason=f"Gemini Audit: {len(charges)} charge(s), {sum(c['position'] == 'CONTRADICTS' for c in charges)} contradicted",
-        payload={"charges": charges, "claimable_usd": round(claimable, 2),
-                 "unclaimable": [c for c in charges if c["position"] != "CONTRADICTS"]},
+        needs_human=False,  # SILENT has nothing for a person to decide; claims are reviewed via the final outcome
+        reason=f"{len(charges)} charge(s) audited by {model['name']}: {n_claim} contradicted, "
+               f"{sum(c['position'] == 'SILENT' for c in charges)} silent",
+        payload=payload,
     )
     return build_output(record, next_step="complete")
+
 
 app = make_app(STAGE, handle)

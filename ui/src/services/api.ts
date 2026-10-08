@@ -24,6 +24,8 @@ export interface HealthAgent {
   latency?: string
   error?: string
   owner?: string
+  agent_id?: string
+  implementation?: string
 }
 
 export interface HealthResponse {
@@ -112,8 +114,8 @@ export interface EvidenceCheck {
   check_key: string
   verdict: string
   confidence?: number | null
-  expected?: string
-  observed?: string
+  expected?: unknown
+  observed?: unknown
   detail?: string
   evidence_refs?: string[]
   uncertain_reason?: string
@@ -136,6 +138,8 @@ export interface EvidenceRecord {
   checks?: EvidenceCheck[]
   payload: Record<string, any>
   inputs: Array<{ ref?: string; kind?: string; sha256?: string; [key: string]: any }>
+  upstream_refs?: string[]
+  model?: { name: string; version?: string; calls?: number; cost_usd?: number | null }
   content_hash?: string
 }
 
@@ -144,6 +148,7 @@ export interface CaseItem {
   unit_id: string
   route?: string
   returned?: boolean
+  source?: 'pod' | 'sample'
 }
 
 export interface EvidenceBundle {
@@ -171,6 +176,8 @@ export const api = {
   health: () => req<HealthResponse>('/health'),
 
   cases: () => req<CaseItem[]>('/cases'),
+
+  listWorkflows: () => req<WorkflowState[]>('/workflows'),
 
   runWorkflow: (orgId: string, unitId: string, route?: string, returned?: boolean) =>
     req<WorkflowState>('/workflows', {

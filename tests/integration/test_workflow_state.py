@@ -157,6 +157,48 @@ def test_resume_retries_a_failed_stage_and_keeps_the_failed_evidence():
     assert store.get_evidence(failed_id)["status"] != "completed", "the failed attempt remains traceable"
 
 
+def _record(wf, stage):
+    return next(s["record_id"] for s in wf["stage_results"] if s["stage"] == stage)
+
+
+def test_resume_re_runs_recovery_after_an_upstream_stage_is_repaired():
+    """D-012: Recovery judged the degraded Prep record; once Prep is repaired, Recovery must see the real evidence."""
+    import tests.helpers as h
+    store, recovery = MemoryStore(), Fake("PASS")
+    clients = fakes(prep=h.Flaky(h.AgentUnavailable("blip"), n=2), recovery=recovery)
+    wf = run_workflow(CASE, STANDARD, store, clients)
+    old_rcy, degraded_prep = _record(wf, "recovery"), _record(wf, "prep")
+    assert degraded_prep in store.get_evidence(old_rcy)["upstream_refs"]
+    wf = resume(wf["workflow_id"], STANDARD, store, clients)
+    new_rcy, new_prep = _record(wf, "recovery"), _record(wf, "prep")
+    assert recovery.calls == 2 and new_rcy != old_rcy
+    assert new_prep in store.get_evidence(new_rcy)["upstream_refs"], "Recovery re-judged with the repaired Prep record"
+    assert old_rcy in wf["evidence_references"], "the earlier Recovery record stays on record"
+    assert any(t["event"] == "stage_stale" and t["stage"] == "recovery" for t in wf["transitions"])
+    assert wf["status"] == "COMPLETED"
+
+
+def test_resume_after_an_override_re_runs_recovery_with_the_override():
+    store, recovery = MemoryStore(), Fake("PASS")
+    clients = fakes(prep="FAIL", recovery=recovery)
+    wf = run_workflow(CASE, STANDARD, store, clients)
+    wf = apply_override(wf["workflow_id"], store, record_id=_record(wf, "prep"), new_verdict="PASS", actor="op", reason="label is flat")
+    assert recovery.calls == 1, "an override alone does not re-run anything"
+    assert any(t["event"] == "downstream_judged_before_override" for t in wf["transitions"])
+    wf = resume(wf["workflow_id"], STANDARD, store, clients)
+    assert recovery.calls == 2
+    assert store.get_evidence(_record(wf, "recovery"))["upstream_refs"], "re-run record still cites its upstream"
+
+
+def test_stages_without_the_flag_are_not_re_run():
+    store, prep = MemoryStore(), Fake("PASS")
+    clients = fakes(receiving="UNCERTAIN", prep=prep)
+    wf = run_workflow(CASE, STANDARD, store, clients)
+    apply_override(wf["workflow_id"], store, record_id=_record(wf, "receiving"), new_verdict="PASS", actor="op", reason="ok")
+    resume(wf["workflow_id"], STANDARD, store, clients)
+    assert prep.calls == 1, "Prep does not judge with upstream evidence, so the flow does not re-run it"
+
+
 # ------------------------------------------------------------ overrides
 def test_override_references_the_evidence_and_changes_the_outcome_without_rewriting_it():
     wf, store = run(prep="FAIL")
@@ -262,3 +304,19 @@ def test_specialist_flow_has_no_prep_and_recovery_stays_silent_on_inbound_fees(c
     for charge in rec["payload"]["charges"]:
         if charge["charge_type"] == "inbound_defect_fee":
             assert charge["position"] == "SILENT", "no Prep evidence, so no claim"
+
+
+# ------------------------------------------------------------ an agent that cannot be imported
+def test_agent_that_cannot_be_imported_is_recorded_not_a_crash():
+    """A missing dependency in one agent (e.g. an import of a package not in requirements.txt) must become an error
+    record for that stage; the other stages still run and the workflow ends FAILED, never a crashed run."""
+    from orchestration.clients import InProcClient
+
+    broken = InProcClient({"module": "agents.no_such_agent_module", "stage": "returns"})
+    assert broken.load_error and "no_such_agent_module" in broken.load_error
+    wf, _ = run(returns=broken)
+    by_stage = {s["stage"]: s for s in wf["stage_results"]}
+    assert by_stage["returns"]["state"] == "error"
+    assert by_stage["returns"]["error"]["code"] == "agent_exception"
+    assert by_stage["recovery"]["state"] == "completed"
+    assert valid(wf)["status"] == "FAILED"

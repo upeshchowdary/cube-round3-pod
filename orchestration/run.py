@@ -6,13 +6,14 @@
   python -m orchestration.run --case examples/uncertain-path/case.json
   python -m orchestration.run --resume WF-org_demo_alpha-UNIT-0014
   python -m orchestration.run --override WF-... --record PRP-0014 --verdict PASS --actor you --reason "..." [--and-resume]
-State and evidence are written under --out (default out/): workflows/<id>.json and evidence/<record_id>.json.
+State and evidence are written under --out (default $OUT_DIR, else out/): workflows/<id>.json and evidence/<record_id>.json.
 """
 from __future__ import annotations
 
 import argparse
 import collections
 import json
+import os
 from pathlib import Path
 
 from shared.utils.schema import errors
@@ -28,7 +29,7 @@ def main() -> int:
     ap.add_argument("--cases", default=str(ROOT / "data/sample/cases.json"))
     ap.add_argument("--case", help="a single case JSON file")
     ap.add_argument("--flow", default=str(default_flow_path()), help="default: the flow named in pod.json")
-    ap.add_argument("--out", default=str(ROOT / "out"))
+    ap.add_argument("--out", default=os.environ.get("OUT_DIR") or str(ROOT / "out"))
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--unit")
     ap.add_argument("--org")

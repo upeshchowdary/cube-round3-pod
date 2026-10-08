@@ -54,7 +54,9 @@ make case UNIT=UNIT-0014 ORG=org_demo_alpha     # one workflow, in full
 make serve            # orchestrator API on :8100 (POST /workflows, GET /workflows/{id}, GET /health)
 ```
 
-Out of the box everything runs on **organiser stub agents** replaying the synthetic Round 2 CSVs. **Replacing a stub with your real agent is your job.**
+**Pod 05:** all five stages run the members' Round 2 agents (no organiser stub left). With no API keys they run in their offline modes, and every record's `model` says so: Receiving and Pack replay the CSV observations (`csv-replay`), Prep and Recovery are deterministic rules (`rules`), Returns replays cassettes (the 8 committed ones are hand-authored over placeholder images: `synthetic-cassette`). Live model modes and their keys are in `.env.example`. What each agent really is: [`ARCHITECTURE.md` › Pod 05 architecture](ARCHITECTURE.md#pod-05-architecture); numbers and limits: [`docs/evaluation.md`](docs/evaluation.md).
+
+UI: `uvicorn orchestration.api:app --port 8100`, then `cd ui && npm ci && npm run dev` (Vite proxies `/api` to the orchestrator). On Windows use `.venv\Scripts\python -m …` in place of `.venv/bin/…`.
 
 Run an agent as its own service:
 
@@ -87,20 +89,21 @@ Copy `.env.example` to `.env`. **Never commit `.env`.**
 
 ## Example end-to-end workflow
 
-`UNIT-0014` (FBA, returned). Full files in [`examples/end-to-end/`](examples/end-to-end/).
+`UNIT-0014` (FBA, returned), as the Pod's agents produce it (`make case UNIT=UNIT-0014 ORG=org_demo_alpha`).
 
 ```text
-Receiving  RCV-0014  accept          PASS   ─┐
-Prep       PRP-0014  compliant       PASS    │  every record is stored and handed forward as previous_evidence
-Pack       skipped (route = fba: Amazon packs it)
-Returns    RTN-0014  liquidate       PASS   ─┤
-Recovery   RCY-UNIT-0014  claim_recommended  FAIL ◀─┘
-             • inbound_defect_fee  $2.00  CONTRADICTS  <- cites PRP-0014 (Prep says compliant)
-             • weight-tier fee     $4.75  SILENT       <- no measured weight upstream; NOT claimed
+Receiving  RCV-0014                              accept             PASS   ─┐  csv-replay
+Prep       PRP-WF-org_demo_alpha-UNIT-0014-prep  compliant          PASS    │  rules     every record is stored and
+Pack       skipped (route = fba: Amazon packs it)                           │            handed forward as previous_evidence
+Returns    RTN-7b7ce61f9db70424                  liquidate          PASS   ─┤  synthetic-cassette (R11, Used - Like New)
+Recovery   RCY-UNIT-0014                         claim_recommended  FAIL ◀─┘  rules
+             • inbound_defect_fee               $2.00  CONTRADICTS  <- cites the Prep record (Prep says compliant)
+             • fulfilment_fee_weight_tier       $4.75  SILENT       <- no fee schedule looked up; NOT claimed (F-07)
+             • lost_inbound / refund_not_returned  $0  SILENT       <- nothing to claim (F-09, F-10, F-11)
 Workflow status COMPLETED · Final outcome CLAIM_RECOMMENDED ($2.00, evidence attached)
 ```
 
-(The stubs' claim rules are illustrative; your Recovery agent decides for real.) Also see [`examples/happy-path/`](examples/happy-path/), [`examples/uncertain-path/`](examples/uncertain-path/), [`examples/failure-path/`](examples/failure-path/).
+The organiser's stub-based reference files are in [`examples/end-to-end/`](examples/end-to-end/). Also see [`examples/happy-path/`](examples/happy-path/), [`examples/uncertain-path/`](examples/uncertain-path/), [`examples/failure-path/`](examples/failure-path/).
 
 ## Repository structure
 

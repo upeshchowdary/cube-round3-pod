@@ -37,6 +37,7 @@ def build_returns_record(
     agent_id: str,
     model_mode: str,
     cassette_sha256: str | None,
+    cassette_provenance: str | None = None,
     prompt_version: str,
     model_name: str,
     model_version: str,
@@ -227,11 +228,17 @@ def build_returns_record(
 
     # D-013: a replayed answer is labelled as recorded, the same way Pack labels its benchmark replay, so nobody reads
     # "gemini … 0 calls" as a live judgment. Live runs keep the model name and the real request count.
+    # A cassette marked provenance=synthetic was written by hand in the Gemini response format, not recorded from a
+    # model run on these captures: it exercises the pipeline and rules, and must never be read as a model judgment.
     replayed = model_mode == "replay"
+    synthetic = replayed and cassette_provenance == "synthetic"
+    if synthetic:
+        payload["cassette_provenance"] = "synthetic"
     model_meta = {
-        "name": f"{model_name} (recorded)" if replayed else model_name,
+        "name": "synthetic-cassette (hand-authored, no model run)" if synthetic
+        else (f"{model_name} (recorded)" if replayed else model_name),
         "version": model_version,
-        "provider": "replay:cassette" if replayed else "google",
+        "provider": ("replay:synthetic-cassette" if synthetic else "replay:cassette") if replayed else "google",
         "prompt_version": prompt_version,
         "calls": live_calls if model_mode in ("live", "record") else 0,
         "cost_usd": 0.0,

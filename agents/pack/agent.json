@@ -3,7 +3,7 @@
   "agent_id": "pack-manager-nikhil@2.0.0",
   "owner": "@nikhilagarwal03",
   "mode": "inproc",
-  "url": "http://localhost:8103",
+  "url": "http://127.0.0.1:8103",
   "module": "agents.pack.app",
   "implementation": "VLM vision extractor (Llama-3.2-90B / Qwen) + deterministic reconciliation engine with occlusion guard and fail-open policy",
   "notes": "Round 2 Pack Manager adapter with tri-state decisions (seal, stop_and_fix, pending_review), held-out benchmark replay, and tenancy isolation."

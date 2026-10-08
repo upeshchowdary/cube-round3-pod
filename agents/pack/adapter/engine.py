@@ -94,11 +94,13 @@ def reconcile_pack(
     all_items_present = len(missing_items) == 0
     quantities_correct = len(quantity_mismatches) == 0
 
-    occlusion = extracted.get("occlusion", {})
-    occlusion_status = occlusion.get("status", "clear") if isinstance(occlusion, dict) else "clear"
+    occlusion = extracted.get("occlusion")
+    occlusion_status = occlusion.get("status", "not_reported") if isinstance(occlusion, dict) else "not_reported"
+    # Same rule as Round 2 engine.ts: anything other than an explicit "clear" is uncertain evidence. (The port used to
+    # check only partial/severe, so an unexpected value such as "heavy" or a missing field could still be sealed.)
     has_uncertain_evidence = (
         extracted.get("status") == "uncertain"
-        or occlusion_status in ("partial", "severe")
+        or occlusion_status != "clear"
     )
 
     if has_uncertain_evidence:

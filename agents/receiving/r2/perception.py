@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Tuple
 
 from .prompts import RECEIVING_INSPECTION_SYSTEM_PROMPT, build_user_prompt
@@ -26,7 +27,8 @@ from .schemas import (
 
 
 def observe_deterministic(po: PurchaseOrderInput, row: dict[str, Any], refs: list[str]) -> Tuple[VisionObservation, dict[str, Any]]:
-    """Build deterministic perceptual observations from known receiving facts."""
+    """Replay the operator-recorded facts of a sample CSV row as observations. NOT vision: no image is examined,
+    so every observation says it came from the CSV row, and model.name is "csv-replay"."""
     flags = [f.strip() for f in (row.get("quality_flags") or "").split(";") if f.strip()]
     co = int(row.get("cartons_ordered", po.expected_cartons))
     cr = int(row.get("cartons_received", po.expected_cartons))
@@ -35,43 +37,45 @@ def observe_deterministic(po: PurchaseOrderInput, row: dict[str, Any], refs: lis
     ident = row.get("identity_match", "yes")
     c_dam = row.get("carton_damage", "none")
     u_dam = row.get("unit_damage", "none")
+    src = f"csv:{row.get('record_id', 'receiving_sample')}"
 
     evidence_list: list[EvidenceRef] = []
     uncertainty_list: list[UncertaintyItem] = []
 
-    primary_ref = refs[0] if refs else "fixtures/receiving/default.jpg"
+    # Cite the capture refs the row names (no bytes are read in replay), else the CSV row itself.
+    primary_ref = refs[0] if refs else src
     carton_ref = refs[1] if len(refs) > 1 else primary_ref
     unit_ref = refs[2] if len(refs) > 2 else primary_ref
 
     # Product identity observation
     if ident.lower() == "yes":
-        evidence_list.append(EvidenceRef(image_id=primary_ref, observation=f"Clear SKU label verified: {po.sku}", field="product"))
+        evidence_list.append(EvidenceRef(image_id=primary_ref, observation=f"CSV row records identity match for {po.sku}", field="product"))
         prod_obs = ProductObservation(observed_sku=po.sku, confidence=0.98)
     elif ident.lower() == "uncertain":
-        uncertainty_list.append(UncertaintyItem(field="product", reason="Barcode label obscured or unreadable."))
+        uncertainty_list.append(UncertaintyItem(field="product", reason="CSV row records identity as uncertain."))
         prod_obs = ProductObservation(observed_sku="uncertain", confidence=0.4)
     else:
-        evidence_list.append(EvidenceRef(image_id=primary_ref, observation=f"Observed label mismatch: found {ident}", field="product"))
+        evidence_list.append(EvidenceRef(image_id=primary_ref, observation=f"CSV row records identity mismatch: {ident}", field="product"))
         prod_obs = ProductObservation(observed_sku=ident, confidence=0.95)
 
     # Quantity observation
     qty_conf = 0.95
     if qo != qr or co != cr:
         qty_conf = 0.90
-    evidence_list.append(EvidenceRef(image_id=carton_ref, observation=f"Cartons counted: {cr} of {co}; Units counted: {qr} of {qo}", field="quantity"))
+    evidence_list.append(EvidenceRef(image_id=carton_ref, observation=f"CSV row records cartons {cr} of {co}; units {qr} of {qo}", field="quantity"))
     qty_obs = QuantityObservation(observed_units=qr, observed_cartons=cr, confidence=qty_conf)
 
     # Condition observation
     c_conf = 0.4 if (c_dam.lower() == "uncertain" or u_dam.lower() == "uncertain") else 0.95
     if c_dam.lower() == "uncertain":
-        uncertainty_list.append(UncertaintyItem(field="condition", reason="Poor lighting or angle hides carton exterior."))
+        uncertainty_list.append(UncertaintyItem(field="condition", reason="CSV row records carton condition as uncertain."))
     elif c_dam.lower() not in ("none", ""):
-        evidence_list.append(EvidenceRef(image_id=carton_ref, observation=f"Visible carton damage: {c_dam}", field="condition"))
+        evidence_list.append(EvidenceRef(image_id=carton_ref, observation=f"CSV row records carton damage: {c_dam}", field="condition"))
 
     if u_dam.lower() == "uncertain":
-        uncertainty_list.append(UncertaintyItem(field="condition", reason="Unit interior obscured from camera view."))
+        uncertainty_list.append(UncertaintyItem(field="condition", reason="CSV row records unit condition as uncertain."))
     elif u_dam.lower() not in ("none", ""):
-        evidence_list.append(EvidenceRef(image_id=unit_ref, observation=f"Visible unit damage: {u_dam}", field="condition"))
+        evidence_list.append(EvidenceRef(image_id=unit_ref, observation=f"CSV row records unit damage: {u_dam}", field="condition"))
 
     cond_obs = ConditionObservation(
         damaged=(c_dam.lower() not in ("none", "", "uncertain") or u_dam.lower() not in ("none", "", "uncertain")),
@@ -97,18 +101,28 @@ def observe_deterministic(po: PurchaseOrderInput, row: dict[str, Any], refs: lis
     )
 
     model_meta = {
-        "name": "receiving-vision-engine",
-        "version": "v2.0-deterministic",
-        "provider": "Pod 05 Receiving Engine",
-        "prompt_version": "v1.2",
+        "name": "csv-replay",
+        "version": "receiving-r2-replay",
+        "provider": None,
         "calls": 0,
         "cost_usd": 0.0,
     }
     return obs, model_meta
 
 
-def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str) -> Tuple[VisionObservation, dict[str, Any]]:
-    """Live Google Gemini 2.5 Flash / Flash-Lite multimodal perception."""
+_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str, input_dir: Path | None = None) -> Tuple[VisionObservation, dict[str, Any]]:
+    """Live Google Gemini multimodal perception: one call carrying every capture's bytes."""
+    root = (input_dir or Path(os.environ.get("INPUT_DIR", Path(__file__).resolve().parents[3] / "data" / "input"))).resolve()
+    images = []
+    for ref in refs:
+        path = (root / ref).resolve()
+        if path.is_relative_to(root) and path.is_file() and path.suffix.lower() in _MIME:
+            images.append((ref, path.read_bytes(), _MIME[path.suffix.lower()]))
+    if not images:
+        raise RuntimeError("no readable receiving captures under data/input/<unit>/receiving/: nothing to look at")
     try:
         from google import genai
         from google.genai import types
@@ -121,15 +135,15 @@ def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str) -> Tup
             expected_quantity=po.expected_quantity,
             expected_cartons=po.expected_cartons,
             expected_variant=po.expected_variant,
-            image_refs=refs,
+            image_refs=[ref for ref, _, _ in images],
         )
+        parts: list[Any] = [RECEIVING_INSPECTION_SYSTEM_PROMPT, user_prompt]
+        for ref, data_bytes, mime in images:
+            parts += [f"imageId: {ref}", types.Part.from_bytes(data=data_bytes, mime_type=mime)]
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[
-                RECEIVING_INSPECTION_SYSTEM_PROMPT,
-                user_prompt,
-            ],
+            contents=parts,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
@@ -170,10 +184,10 @@ def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str) -> Tup
         model_meta = {
             "name": "gemini-2.5-flash",
             "version": "2.5-flash",
-            "provider": "Google Gemini",
+            "provider": "google",
             "prompt_version": "v1.2",
             "calls": 1,
-            "cost_usd": 0.001,
+            "cost_usd": None,  # not measured
         }
         return obs, model_meta
     except Exception as exc:

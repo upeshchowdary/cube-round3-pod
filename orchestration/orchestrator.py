@@ -26,7 +26,7 @@ from shared.utils.schema import errors as schema_errors
 
 from .clients import AgentRejected, AgentTimeout, AgentUnavailable, client_for, load_manifest
 from .rollup import derive_final_outcome, derive_status, effective
-from .store import MemoryStore
+from .store import EvidenceConflict, MemoryStore
 
 ROOT = Path(__file__).resolve().parents[1]
 logger = get_logger("orchestrator")
@@ -193,7 +193,14 @@ def _run_stage(wf: dict, sr: dict, idx: int, opts: dict, store, client) -> dict 
         _log(wf, "stage_degraded", stage, f"{err['code']}: recorded as {out['evidence']['status']}; flow policy decides what next")
 
     ev = out["evidence"]
-    store.put_evidence(ev)
+    try:
+        store.put_evidence(ev)
+    except EvidenceConflict as exc:  # an agent reused a record_id for different content: reject, never overwrite
+        err = error_obj("invalid_output", str(exc), retryable=False, stage=stage)
+        _log(wf, "invalid_output", stage, err["message"])
+        out = pending_output(request, code=err["code"], message=err["message"], retryable=False, agent_id=sr["agent_id"])
+        ev = out["evidence"]
+        store.put_evidence(ev)
     if ev["record_id"] not in wf["evidence_references"]:
         wf["evidence_references"].append(ev["record_id"])
     agent_err = ev.get("error") or err
@@ -226,19 +233,52 @@ def _finalize(wf: dict, store) -> dict:
     return wf
 
 
+def _stale_reason(wf: dict, idx: int, store) -> str | None:
+    """Why a completed stage's judgment no longer reflects its upstream evidence (None = still current).
+
+    It is stale when an earlier stage has since produced a different record (e.g. a failed stage was resumed), or
+    when an override on an earlier record was made at or after this stage finished (it judged the old verdict).
+    """
+    sr = wf["stage_results"][idx]
+    rec = store.get_evidence(sr["record_id"]) if sr.get("record_id") else None
+    if rec is None:
+        return None
+    current = [s["record_id"] for s in wf["stage_results"][:idx] if s.get("record_id")]
+    if set(rec["upstream_refs"]) != set(current):
+        return f"upstream evidence changed since it ran ({sorted(set(current) - set(rec['upstream_refs']))} new)"
+    later = [o["override_id"] for o in wf["overrides"]
+             if o["supersedes"]["record_id"] in current and o["at"] >= (sr["finished_at"] or "")]
+    if later:
+        return f"upstream override(s) {later} were made after it ran"
+    return None
+
+
+def _step_opts(flow: dict, stage: str) -> dict:
+    defaults = {"timeout_s": 30, "retries": 1, "on_uncertain": "continue", "on_error": "continue",
+                "rerun_when_upstream_changes": False, **flow.get("defaults", {})}
+    step = next(s for s in flow["steps"] if s["stage"] == stage)
+    return {**defaults, **{k: v for k, v in step.items() if k not in ("stage", "when")}}
+
+
 # ---------------------------------------------------------------- public API
 def advance(wf: dict, flow: dict, store, clients: dict | None = None) -> dict:
-    """Run every stage that has not completed (errored stages are retried), in order, until done or halted."""
-    defaults = {"timeout_s": 30, "retries": 1, "on_uncertain": "continue", "on_error": "continue", **flow.get("defaults", {})}
-    steps = {s["stage"]: s for s in flow["steps"]}
+    """Run every stage that has not completed (errored stages are retried), in order, until done or halted.
+
+    A completed stage whose flow step sets `rerun_when_upstream_changes` is run again (new record; the old one stays
+    in evidence_references) when its upstream evidence or an upstream override changed after it ran.
+    """
     wf["halted"] = None
     _set_status(wf, "IN_PROGRESS", "advancing")
     store.save_workflow(wf)
     for idx, sr in enumerate(wf["stage_results"]):
+        opts = _step_opts(flow, sr["stage"])
+        if sr["state"] == "completed" and opts["rerun_when_upstream_changes"]:
+            why = _stale_reason(wf, idx, store)
+            if why:
+                sr["state"] = "pending"
+                _log(wf, "stage_stale", sr["stage"], f"{sr['record_id']} re-run: {why}")
         if sr["state"] in ("completed", "skipped"):
             continue
-        step = steps[sr["stage"]]
-        opts = {**defaults, **{k: v for k, v in step.items() if k not in ("stage", "when")}}
         client = (clients or {}).get(sr["stage"]) or client_for(sr["stage"])
         halt = _run_stage(wf, sr, idx, opts, store, client)
         store.save_workflow(wf)
@@ -287,6 +327,10 @@ def apply_override(workflow_id: str, store, *, record_id: str, new_verdict: str,
              "new_verdict": new_verdict, "new_outcome": new_outcome}
     wf["overrides"].append(entry)
     _log(wf, "override", record["stage"], f"{entry['override_id']} by {actor}: {previous_verdict} -> {new_verdict}")
+    stages = [s["stage"] for s in wf["stage_results"]]
+    after = [s["stage"] for s in wf["stage_results"][stages.index(record["stage"]) + 1:] if s["state"] == "completed"]
+    if after:  # they judged the old verdict; resume re-runs the ones the flow marks rerun_when_upstream_changes
+        _log(wf, "downstream_judged_before_override", record["stage"], f"{', '.join(after)} ran before {entry['override_id']}; resume to re-evaluate")
     return _finalize(wf, store)
 
 

@@ -27,6 +27,9 @@ class MemoryStore:
     def save_workflow(self, wf: dict) -> None:
         self.workflows[wf["workflow_id"]] = json.loads(json.dumps(wf))
 
+    def list_workflows(self) -> list[dict]:
+        return [json.loads(json.dumps(wf)) for wf in self.workflows.values()]
+
     def get_evidence(self, record_id: str) -> dict | None:
         return self.evidence.get(record_id)
 
@@ -53,6 +56,9 @@ class FileStore(MemoryStore):
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(wf, indent=2))
         tmp.replace(p)  # atomic: a crash never leaves half a workflow
+
+    def list_workflows(self) -> list[dict]:
+        return [json.loads(p.read_text()) for p in sorted((self.root / "workflows").glob("*.json"))]
 
     def get_evidence(self, record_id: str) -> dict | None:
         p = self.root / "evidence" / f"{record_id}.json"

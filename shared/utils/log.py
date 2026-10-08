@@ -28,6 +28,7 @@ def get_logger(name: str) -> logging.Logger:
         if os.environ.get("LOG_FORMAT", "json") == "json":
             handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
-        logger.setLevel(os.environ.get("LOG_LEVEL", "WARNING").upper())
+        level = os.environ.get("LOG_LEVEL", "WARNING").strip().upper()
+        logger.setLevel(level if level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL") else "WARNING")  # a typo must not crash
         logger.propagate = False
     return logger

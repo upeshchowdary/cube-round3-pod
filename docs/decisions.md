@@ -76,17 +76,6 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 
 ## Your Pod's decisions
 
-### D-007 · Pack Manager deterministic reconciliation, occlusion guard, and fail-open policy
-- Date / Owner: 2026-10-07 / @nikhilagarwal03 (Member 3 - Pack Manager)
-- Context: Pack Manager must reliably verify open-box contents before seal on MFN routes, guard against hallucinated seals under paper/dunnage occlusion, and guarantee the warehouse conveyor never halts on VLM API latency or failures.
-- Options considered:
-  - Option A: Single VLM call predicting binary verdict (`SEAL` vs `STOP_AND_FIX`) directly from image. (Rejected: Model hallucinations and lack of mathematical rigor on quantities).
-  - Option B: Full external microservice requiring MongoDB and live S3 buckets. (Rejected: Fails clean clones and CI when database credentials are not present).
-  - Option C: Pure mathematical reconciliation engine on top of batched VLM observations, paired with a 6-second fail-open guard returning `UNCERTAIN` / `pending_review`, with offline benchmark replay for CI reproducibility. (Selected).
-- Decision: Port Round 2 deterministic reconciliation engine (`agents/pack/adapter/engine.py`) and batched VLM vision extractor (`agents/pack/adapter/vision.py`).
-- Why: Guarantees exact count and SKU discrepancy detection, flags occlusion as `UNCERTAIN` (Cohen's $\kappa = 0.88$, 95.45% accuracy across 50 held-out units), strictly enforces multi-tenant isolation (Rule 5.1), and runs 100% offline in CI without external database or API blockers.
-- Consequences: Eliminates database runtime dependencies; ensures clean `pytest` passes out of the box; ensures Returns Manager can citable-verify `observed_in_box` for customer claims.
-
 ### D-007 · Resolution of Finding F-11: Returns evidence contradicts channel refund claims
 - **Date / Owner:** 2026-10-07 / @upeshchowdary & @vishruth-16
 - **Context:** Amazon fee reports charge `refund_issued_item_not_returned` asserting that the customer was refunded because the unit was not returned. Finding F-11 raised whether seller-side Returns records can contradict channel-side refund charges.
@@ -117,3 +106,42 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 - **Context:** Inbound shipments often have supplier-side shortages that must not be conflated with Amazon warehouse loss.
 - **Decision:** `inbound_defect_fee` audits evaluate against Prep compliance records first, falling back to Receiving evidence. `lost_inbound` charges with supplier shortfalls remain SILENT.
 - **Why:** Prevents fraudulent claims against shipping channels when the supplier under-shipped at the factory.
+
+### D-011 · Pack Manager deterministic reconciliation, occlusion guard, and fail-open policy
+- Date / Owner: 2026-10-07 / @nikhilagarwal03 (Member 3 - Pack Manager)
+- Context: Pack Manager must reliably verify open-box contents before seal on MFN routes, guard against hallucinated seals under paper/dunnage occlusion, and guarantee the warehouse conveyor never halts on VLM API latency or failures.
+- Options considered:
+  - Option A: Single VLM call predicting binary verdict (`SEAL` vs `STOP_AND_FIX`) directly from image. (Rejected: Model hallucinations and lack of mathematical rigor on quantities).
+  - Option B: Full external microservice requiring MongoDB and live S3 buckets. (Rejected: Fails clean clones and CI when database credentials are not present).
+  - Option C: Pure mathematical reconciliation engine on top of batched VLM observations, paired with a 6-second fail-open guard returning `UNCERTAIN` / `pending_review`, with offline benchmark replay for CI reproducibility. (Selected).
+- Decision: Port Round 2 deterministic reconciliation engine (`agents/pack/adapter/engine.py`) and batched VLM vision extractor (`agents/pack/adapter/vision.py`).
+- Why: Guarantees exact count and SKU discrepancy detection, flags occlusion as `UNCERTAIN` (Cohen's $\kappa = 0.88$, 95.45% accuracy across 50 held-out units), strictly enforces multi-tenant isolation (Rule 5.1), and runs 100% offline in CI without external database or API blockers.
+- Consequences: Eliminates database runtime dependencies; ensures clean `pytest` passes out of the box; ensures Returns Manager can citable-verify `observed_in_box` for customer claims.
+- Note (merge, @upeshchowdary): numbered D-011 on merge because `main` already used D-007 for the F-11 decision.
+
+### D-012 · Resume re-runs stages whose upstream evidence changed (orchestration)
+- **Date / Owner:** 2026-10-07 / @upeshchowdary (orchestration coordinator). **Needs Pod review.**
+- **Context:** With `on_error: continue`, Recovery runs even when an earlier stage failed, and judges the degraded record. Found in a failure drill (Returns agent down, UNIT-0016): after `resume` repaired Returns, Recovery's record still cited the degraded Returns record. Overrides had the same gap: Recovery never saw a person's correction of Prep or Returns.
+- **Options considered:**
+  - *A:* Leave it; tell operators to re-run manually. Rejected: the final outcome silently rests on stale evidence.
+  - *B:* Re-run downstream stages inside `apply_override`. Rejected: the organiser tests require "overriding does not silently resume".
+  - *C (chosen):* A flow step can set `rerun_when_upstream_changes`. On `resume` (or a repeated run), such a completed stage runs again when an earlier stage now has a different record, or when an override on an earlier record is at or after its `finished_at`. Set for Returns and Recovery (the stages that judge with upstream evidence), not for Receiving/Prep/Pack.
+- **Consequences:** The old record stays in `evidence_references`; the re-run gets a new `record_id` (Recovery: `RCY-<unit>-rN`); `stage_stale` and `downstream_judged_before_override` transitions explain why. An agent that reuses a `record_id` for different content is now recorded as `invalid_output` instead of crashing the orchestrator. Tests: `test_resume_re_runs_recovery_*`, `test_stages_without_the_flag_are_not_re_run`.
+
+### D-013 · Model labels say what actually ran (honesty)
+- **Date / Owner:** 2026-10-07 / @upeshchowdary. **Owners of Receiving, Pack and Recovery please review.**
+- **Context:** Several records named a vision model while no image was examined: Receiving's replay built observations from CSV columns (labelled `receiving-vision-engine`, observation text "Clear SKU label verified"); Pack's CSV fallback was labelled Llama-3.2-90B with `calls: 1`, and its benchmark replay `calls: 1`; Recovery was labelled Gemini 1.5 and imported the deprecated `google.generativeai` package, which is not in `requirements.txt` (a clean clone failed to import it). The rubric's honesty adjustments penalise this.
+- **Decision:** CSV replays are `model.name = "csv-replay"`, `calls: 0`, confidence `null`, and observation text says "CSV row records …". Pack's recorded benchmark answers are `"<model> (recorded)"`, provider `replay:run_2.json`, `calls: 0`. Recovery defaults to `model.name = "rules"`; `RECOVERY_MODEL_MODE=live` makes one batched `google-genai` call per unit, only for charge types no rule covers, and a model claim must cite a real upstream record. Receiving's live mode now sends the capture bytes (it previously sent only file names).
+- **Also:** Pack wrote free text into `uncertain_reason`, which the schema rejects (an UNCERTAIN Pack result would have been dropped as `invalid_output`); it now uses `occluded` with the text in `detail`. Recovery treats `reimbursement_report` / `damaged_in_warehouse` lines as credits, never claims, and disputes `refund_issued_item_not_returned` only when Returns verified the item's identity (a wrong item coming back does not contradict "not returned").
+
+### D-014 · Tenancy at the API door; an agent that cannot load is a recorded error
+- **Date / Owner:** 2026-10-08 / @upeshchowdary.
+- **Context:** On `main`, Recovery imported a package missing from `requirements.txt`; the import happened while the orchestrator built the agent client, outside its error handling, so `orchestration.run` crashed for every workflow. Separately, `POST /workflows` for a subject that does not exist in the org (e.g. another tenant's unit) created and stored a FAILED workflow that then showed in the UI.
+- **Options considered:** *A:* fix only the dependency. Rejected: the next missing dependency crashes the whole run again. *B (chosen):* `InProcClient` catches the import error and raises it on `run`, so the stage gets an `agent_exception` error record and the flow continues; `/health` reports that agent as down. For the API: *A:* keep creating a FAILED workflow (agents refuse anyway). Rejected: a wrong-tenant request should be refused, not recorded under the asking tenant. *B (chosen):* 404 when no stage's data and no cases file knows the subject under that org; nothing is stored.
+- **Consequences:** Tests `test_agent_that_cannot_be_imported_is_recorded_not_a_crash`, `tests/e2e/test_api.py`. A Pod subject with captures but no data row must be listed in `data/input/my_cases.json` to be run through the API.
+
+### D-015 · The Returns demo cassettes are synthetic, and say so
+- **Date / Owner:** 2026-10-08 / @upeshchowdary.
+- **Context:** The 8 committed return captures in `data/input/<unit>/returns/` are placeholder images (a coloured frame with the file name), and the 8 cassettes were written by hand in the Gemini response format (60 ms latency, ids like `interaction-UNIT-0014`, judgments such as "two critical product body features match" that no model could make from those images). Evidence labelled them `gemini-3.8-flash (recorded)`. Found by sending one capture to a vision model (Groq `qwen/qwen3.8-27b`), which described it as a placeholder.
+- **Options considered:** *A:* delete them. Rejected: they are the only way CI exercises the Returns pipeline, rules and hand-offs end to end. *B:* re-record. Not possible without real photos and a `GEMINI_API_KEY`. *C (chosen):* keep them, mark each cassette `provenance: synthetic`, and label the evidence `synthetic-cassette (hand-authored, no model run)` with `payload.cassette_provenance`. Cassettes written by `record` mode keep `<model> (recorded)`.
+- **Consequences:** Demo and evaluation state that Returns' 8 verdicts are scripted (`docs/evaluation.md`). Revisit when real photos are captured: replace the images and run `python -m agents.returns.tools.record_cassette`. Also: Pack's live default model on Groq is `qwen/qwen3.8-27b` (Groq does not serve Llama 3.2 Vision); live cost is `null` (not measured) instead of a fixed number.

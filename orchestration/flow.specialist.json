@@ -19,10 +19,12 @@
           true
         ]
       },
-      "stage": "returns"
+      "stage": "returns",
+      "rerun_when_upstream_changes": true
     },
     {
-      "stage": "recovery"
+      "stage": "recovery",
+      "rerun_when_upstream_changes": true
     }
   ],
   "defaults": {
