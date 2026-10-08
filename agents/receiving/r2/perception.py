@@ -111,10 +111,17 @@ def observe_deterministic(po: PurchaseOrderInput, row: dict[str, Any], refs: lis
 
 
 _MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+LIVE_MODEL_DEFAULT = "gemini-3.6-flash"
+
+
+def live_model_name() -> str:
+    """RECEIVING_MODEL overrides; the Round 2 model gemini-2.5-flash is no longer served to new API keys."""
+    return os.environ.get("RECEIVING_MODEL") or LIVE_MODEL_DEFAULT
 
 
 def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str, input_dir: Path | None = None) -> Tuple[VisionObservation, dict[str, Any]]:
     """Live Google Gemini multimodal perception: one call carrying every capture's bytes."""
+    model_name = live_model_name()
     root = (input_dir or Path(os.environ.get("INPUT_DIR", Path(__file__).resolve().parents[3] / "data" / "input"))).resolve()
     images = []
     for ref in refs:
@@ -142,7 +149,7 @@ def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str, input_
             parts += [f"imageId: {ref}", types.Part.from_bytes(data=data_bytes, mime_type=mime)]
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model_name,
             contents=parts,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -182,8 +189,8 @@ def observe_gemini(po: PurchaseOrderInput, refs: list[str], api_key: str, input_
         )
 
         model_meta = {
-            "name": "gemini-2.5-flash",
-            "version": "2.5-flash",
+            "name": model_name,
+            "version": model_name,
             "provider": "google",
             "prompt_version": "v1.2",
             "calls": 1,

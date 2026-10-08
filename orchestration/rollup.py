@@ -93,7 +93,8 @@ def derive_final_outcome(workflow: dict, evidence: dict, status: str) -> dict | 
         outcome, verdict = "CLEAN", "PASS"
         reason = "All applicable stages passed."
     if needs_human and outcome in ("CLAIM_RECOMMENDED", "EXCEPTION"):
-        reason += f" Flagged for review: {', '.join(incomplete + asks)}."
+        # A failed stage's fail-open record also asks for a person: list each stage once.
+        reason += f" Flagged for review: {', '.join(dict.fromkeys(incomplete + asks))}."
     return {
         "workflow_id": workflow["workflow_id"], "outcome": outcome, "verdict": verdict, "reason": reason,
         "needs_human": needs_human, "provisional": status != "COMPLETED",

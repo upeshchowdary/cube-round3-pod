@@ -24,7 +24,7 @@ from shared.utils.stubs import effective_verdict, previous
 STAGE = "recovery"
 AGENT_ID = "recovery-vishruth@1"
 RULES_MODEL = {"name": "rules", "version": "recovery-rules-2", "provider": None, "calls": 0, "cost_usd": 0.0}
-LIVE_MODEL_NAME = os.environ.get("RECOVERY_MODEL", "gemini-2.5-flash")
+LIVE_MODEL_NAME = os.environ.get("RECOVERY_MODEL", "gemini-3.6-flash")  # gemini-2.5-flash is not served to new keys
 # Lines on these reports are credits paid to the seller, not charges to dispute.
 CREDIT_REPORTS = {"reimbursement_report"}
 
