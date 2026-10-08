@@ -110,7 +110,9 @@ def _live_audit(lines: list[dict], request: dict) -> tuple[dict[str, tuple[str, 
 
 def handle(request: dict) -> dict:
     s = request["subject"]
-    if not sample_data.has("receiving", s["subject_id"], s["org_id"]):  # tenancy: never answer for another org
+    # Tenancy: never answer for another org. Any file of the dataset may name the unit (a judge's dataset can lack the
+    # Receiving file), but always under this org.
+    if not sample_data.known(s["subject_id"], s["org_id"]):
         raise LookupError(f"unknown subject {s['subject_id']} in {s['org_id']}")
 
     lines = sample_data.fee_lines(s["subject_id"], s["org_id"])

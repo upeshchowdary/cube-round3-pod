@@ -39,9 +39,16 @@ STORE = FileStore()
 
 @app.get("/cases")
 def list_cases() -> list[dict]:
-    """The Pod's own cases (data/input/my_cases.json) first, then the organiser sample cases."""
+    """The Pod's own cases (data/input/my_cases.json) first, then the dataset's cases.json.
+
+    With DATA_DIR pointing at a loaded dataset (scripts/dev.py dataset), only that dataset's cases are listed: the Pod's
+    demo units are not in it.
+    """
     out, seen = [], set()
-    for path in (ROOT / "data" / "input" / "my_cases.json", ROOT / "data" / "sample" / "cases.json"):
+    paths = [sample_data.data_dir() / "cases.json"]
+    if sample_data.data_dir().resolve() == sample_data.DEFAULT_DIR.resolve():
+        paths.insert(0, ROOT / "data" / "input" / "my_cases.json")
+    for path in paths:
         if path.exists():
             for case in json.loads(path.read_text()):
                 key = (case["org_id"], case["unit_id"])
@@ -81,7 +88,7 @@ def health() -> dict:
 
 def _known(org: str, subject: str) -> bool:
     """A subject exists for an org when any stage's data has it, or the Pod's / organiser's cases list it."""
-    if any(sample_data.has(kind, subject, org) for kind in sample_data.FILES):
+    if sample_data.known(subject, org):
         return True
     return any(c["org_id"] == org and c["unit_id"] == subject for c in list_cases())
 
@@ -91,12 +98,28 @@ def create(body: dict) -> dict:
     org, subject = body.get("org_id"), body.get("subject_id") or body.get("unit_id")
     if not org or not subject:
         raise HTTPException(422, "org_id and unit_id (or subject_id) are required")
-    if not _known(org, subject):
-        # Tenancy at the front door: a subject that does not exist under this org is refused, and no workflow is created.
-        raise HTTPException(404, f"unknown subject {subject} in {org}")
-    case = {"org_id": org, "unit_id": subject, "route": body.get("route") or sample_data.route(subject, org),
-            "returned": body.get("returned", sample_data.has("returns", subject, org))}
+    try:
+        if not _known(org, subject):
+            # Tenancy at the front door: a subject that does not exist under this org is refused, and no workflow is created.
+            raise HTTPException(404, f"unknown subject {subject} in {org}")
+        case = sample_data.case_for(subject, org, route_hint=body.get("route"), returned=body.get("returned"))
+    except sample_data.DatasetError as exc:  # a dataset file lacks a column an agent needs: say which, run nothing
+        raise HTTPException(422, str(exc)) from exc
     return run_workflow(case, load_flow(FLOW), STORE)
+
+
+@app.get("/recovery/charges")
+def recovery_charges(org_id: str | None = None) -> list[dict]:
+    """Every fee line judged by each workflow's current Recovery record, in one call (the Recovery page used to fetch
+    every workflow's evidence bundle, about 100 requests, and repeat that on each 15-second refresh)."""
+    out = []
+    for wf in STORE.list_workflows(org_id):
+        sr = next((s for s in wf["stage_results"] if s["stage"] == "recovery" and s["state"] == "completed"), None)
+        rec = STORE.get_evidence(sr["record_id"], wf["org_id"]) if sr and sr.get("record_id") else None
+        if rec:
+            out.append({"workflow_id": wf["workflow_id"], "record_id": rec["record_id"],
+                        "reason": rec["decision"].get("reason"), "charges": (rec.get("payload") or {}).get("charges", [])})
+    return out
 
 
 def _get(workflow_id: str, org_id: str | None = None) -> dict:

@@ -94,9 +94,12 @@ def new_workflow(case: dict, flow: dict) -> dict:
     """A PENDING workflow with every stage listed and routing already decided."""
     now = utcnow()
     subject_id = case.get("subject_id") or case["unit_id"]
+    no_input = set(case.get("skip_stages") or [])  # stages the dataset has no input for (sample_data.case_for)
     stage_results = []
     for step in flow["steps"]:
         ok, why = applies(step, case)
+        if ok and step["stage"] in no_input:
+            ok, why = False, f"no {step['stage']} input for this unit in the dataset"
         try:
             agent_id = load_manifest(step["stage"])["agent_id"]
         except FileNotFoundError:
