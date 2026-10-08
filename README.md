@@ -55,7 +55,11 @@ python scripts/dev.py test      # the whole test suite
 python scripts/dev.py run       # every sample workflow + the Pod's own cases -> out/
 python scripts/dev.py up        # API on :8100 + UI on :5173 together; open http://localhost:5173/overview
 python scripts/dev.py doctor    # if something does not start: checks Python, Node, venv and ports
+python scripts/dev.py dataset <folder>          # check + run a dataset someone hands you (any of the 5 files)
+python scripts/dev.py up --dataset <name>       # the UI on that dataset
 ```
+
+Running live on someone else's data (e.g. the judges'): [`docs/live-demo-runbook.md`](docs/live-demo-runbook.md).
 
 (On macOS/Linux use `python3` if `python` is not 3.11+.) **With `make`** (macOS/Linux, or Git Bash on Windows):
 

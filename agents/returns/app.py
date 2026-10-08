@@ -104,6 +104,18 @@ def _round2_settings(mode: str = "replay") -> Settings:
     return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info", **overrides)
 
 
+def _model_mode(org_id: str, subject_id: str) -> str:
+    """RETURNS_MODEL_MODE, except that in replay a unit with no recorded answer (a new unit, e.g. from a judge's
+    dataset) is judged live when a Gemini key is configured, instead of failing with no_cassette. The record then says
+    live and names the model. RETURNS_LIVE_FALLBACK=0 turns this off."""
+    mode = os.environ.get("RETURNS_MODEL_MODE", "replay")
+    if (mode == "replay" and os.environ.get("RETURNS_LIVE_FALLBACK", "1") != "0" and os.environ.get("GEMINI_API_KEY")
+            and not (CASSETTES_DIR / org_id / f"{subject_id}.jsonl").is_file()):
+        logger.info("no cassette for %s in %s: judging it live", subject_id, org_id)
+        return "live"
+    return mode
+
+
 ROUND2_COMMIT = _read_round2_commit()
 PROMPT_VERSION = _read_prompt_version()
 
@@ -152,7 +164,7 @@ def handle(request: dict) -> dict:
     )
 
     # 4. Model client and mode configuration (§4.4)
-    mode = os.environ.get("RETURNS_MODEL_MODE", "replay")
+    mode = _model_mode(org_id, subject_id)
     try:
         settings = _round2_settings(mode)
     except Exception as exc:  # a configuration problem is recorded, never a crash of the agent

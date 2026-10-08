@@ -9,8 +9,12 @@
   python scripts/dev.py ui           the UI on :5173 (expects the API on :8100)
   python scripts/dev.py up           API + UI together; Ctrl+C stops both
 
+  python scripts/dev.py dataset <folder or csv files> [--map OLD=NEW] [--category SKU=CAT] [--photos DIR] [--check]
+                                     check a dataset someone hands you (e.g. a judge) and run every unit through the
+                                     five agents; then  python scripts/dev.py up --dataset NAME  shows it in the UI
+
 `make setup/test/run/serve` do the same on macOS/Linux; this script is for machines without make (most Windows ones).
-Options: --api-port N, --ui-port N (serve/ui/up).
+Options: --api-port N, --ui-port N (serve/ui/up), --dataset NAME (serve/up: use out/datasets/NAME).
 """
 from __future__ import annotations
 
@@ -119,9 +123,25 @@ def ui_cmd(port: int) -> list[str]:
     return [npm(), "run", "dev", "--", "--port", str(port), "--strictPort"]
 
 
+def dataset_env(name: str | None) -> dict:
+    """DATA_DIR / INPUT_DIR / OUT_DIR for a dataset loaded with `dev.py dataset` (empty: the Pod's own data)."""
+    if not name:
+        return {}
+    base = ROOT / "out" / "datasets" / name
+    if not (base / "data").is_dir():
+        sys.exit(f"no loaded dataset {name!r}. Load it first:  python scripts/dev.py dataset <folder> --name {name}")
+    say(f"dataset {name}: {base}")
+    return {"DATA_DIR": str(base / "data"), "INPUT_DIR": str(base / "input"), "OUT_DIR": str(base / "run")}
+
+
+def dataset(argv: list[str]) -> int:
+    need_venv()
+    return sh([str(VPY), "-m", "orchestration.dataset", *argv], env={"LOG_LEVEL": os.environ.get("LOG_LEVEL", "WARNING")})
+
+
 def serve(args) -> int:
     need_venv()
-    return sh(serve_cmd(args.api_port))
+    return sh(serve_cmd(args.api_port), env=dataset_env(args.dataset))
 
 
 def ui(args) -> int:
@@ -139,7 +159,7 @@ def up(args) -> int:
     for port in (args.api_port, args.ui_port):
         if not port_free(port):
             sys.exit(f"port {port} is in use. Stop that process, or pass --api-port / --ui-port.")
-    api = subprocess.Popen(serve_cmd(args.api_port), cwd=ROOT)
+    api = subprocess.Popen(serve_cmd(args.api_port), cwd=ROOT, env={**os.environ, **dataset_env(args.dataset)})
     web = subprocess.Popen(ui_cmd(args.ui_port), cwd=UI,
                            env={**os.environ, "ORCH_API_URL": f"http://127.0.0.1:{args.api_port}"})
     say(f"API  http://127.0.0.1:{args.api_port}/health")
@@ -165,8 +185,11 @@ def up(args) -> int:
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["dataset"]:  # everything after `dataset` belongs to orchestration.dataset, untouched
+        return dataset(sys.argv[2:])
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["setup", "doctor", "test", "run", "case", "serve", "ui", "up"])
+    ap.add_argument("command", choices=["setup", "doctor", "test", "run", "case", "serve", "ui", "up", "dataset"])
+    ap.add_argument("--dataset", help="serve/up: use the dataset loaded as out/datasets/NAME")
     ap.add_argument("unit", nargs="?")
     ap.add_argument("org", nargs="?")
     ap.add_argument("--api-port", type=int, default=8100)
