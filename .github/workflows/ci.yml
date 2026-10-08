@@ -18,9 +18,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
-      - name: Contract, routing, roll-up, end-to-end, fail-open and HTTP tests
-        run: python -m pytest
+      - name: make setup (clean-clone install, as the handbook runs it)
+        run: make setup
+      - name: make test (contract, routing, roll-up, end-to-end, fail-open, tenancy and HTTP tests)
+        run: make test
+      - name: make run (every sample workflow end to end)
+        run: make run
+      - name: The Pod's own cases end to end
+        run: .venv/bin/python -m orchestration.run --all --cases data/input/my_cases.json
       - name: Fail if a secret-looking file is committed
         run: |
           bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
