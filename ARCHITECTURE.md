@@ -168,9 +168,11 @@ a cited record; SILENT lines are listed and never claimed (D-005, D-007, D-010).
 
 ### 5. Tenancy
 
-Enforced three times: the API refuses subjects unknown to the org (404, nothing stored); every agent looks its subject
-up scoped by `org_id` and raises → `agent_rejected`; the orchestrator rejects any output whose evidence names another
-org or subject. Tested in `tests/integration/test_agent_contracts.py`, `tests/e2e/test_http.py`, `tests/e2e/test_api.py`;
+Enforced four times: the API refuses subjects unknown to the org (404, nothing stored) and answers another org's
+workflow with 404 (`?org_id=`); every agent looks its subject up scoped by `org_id` and raises → `agent_rejected`; the
+orchestrator rejects any output whose evidence names another org or subject; storage returns nothing across orgs and
+refuses a write that reuses another org's id (`TenantConflict` → `tenant_mismatch`, D-016). Tested in
+`tests/integration/test_agent_contracts.py`, `tests/integration/test_store_tenancy.py`, `tests/e2e/test_http.py`, `tests/e2e/test_api.py`;
 200/200 cross-org requests refused in the evaluation run.
 
 ### 6. Failure model (demo)
