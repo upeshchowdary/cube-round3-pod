@@ -54,7 +54,7 @@ def list_cases() -> list[dict]:
 @app.get("/workflows")
 def list_workflows(org_id: str | None = None) -> list[dict]:
     """Every stored workflow (optionally one org's), newest first."""
-    wfs = [w for w in STORE.list_workflows() if not org_id or w["org_id"] == org_id]
+    wfs = STORE.list_workflows(org_id)
     return sorted(wfs, key=lambda w: w["timestamps"]["updated_at"], reverse=True)
 
 
@@ -99,32 +99,33 @@ def create(body: dict) -> dict:
     return run_workflow(case, load_flow(FLOW), STORE)
 
 
-def _get(workflow_id: str) -> dict:
-    wf = STORE.load_workflow(workflow_id)
+def _get(workflow_id: str, org_id: str | None = None) -> dict:
+    """With ?org_id=, another org's workflow is answered exactly like a missing one (404), never returned."""
+    wf = STORE.load_workflow(workflow_id, org_id)
     if wf is None:
         raise HTTPException(404, f"no workflow {workflow_id}")
     return wf
 
 
 @app.get("/workflows/{workflow_id}")
-def get(workflow_id: str) -> dict:
-    return _get(workflow_id)
+def get(workflow_id: str, org_id: str | None = None) -> dict:
+    return _get(workflow_id, org_id)
 
 
 @app.get("/workflows/{workflow_id}/evidence")
-def evidence(workflow_id: str) -> dict:
-    return bundle(_get(workflow_id), STORE)
+def evidence(workflow_id: str, org_id: str | None = None) -> dict:
+    return bundle(_get(workflow_id, org_id), STORE)
 
 
 @app.post("/workflows/{workflow_id}/resume")
-def resume_workflow(workflow_id: str) -> dict:
-    _get(workflow_id)
+def resume_workflow(workflow_id: str, org_id: str | None = None) -> dict:
+    _get(workflow_id, org_id)
     return resume(workflow_id, load_flow(FLOW), STORE)
 
 
 @app.post("/workflows/{workflow_id}/overrides")
-def override(workflow_id: str, body: dict) -> dict:
-    _get(workflow_id)
+def override(workflow_id: str, body: dict, org_id: str | None = None) -> dict:
+    _get(workflow_id, org_id)
     try:
         return apply_override(workflow_id, STORE, record_id=body.get("record_id", ""), new_verdict=body.get("new_verdict", ""),
                               actor=body.get("actor", ""), reason=body.get("reason", ""), new_outcome=body.get("new_outcome"))
