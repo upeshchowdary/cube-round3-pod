@@ -15,6 +15,11 @@ evaluates the integrated system (routing, hand-offs, rules, failure handling, te
 
 ## Per check (verdict counts, not accuracy)
 
+**TP / TN / FP / FN are not reported yet**: they need two independent human labels per check. The sheet and the
+scorer are ready: `data/labels/labels.csv` (75 checks on the Pod's 6 cases) and `python scripts/score_checks.py
+data/labels/labels.csv` (FAIL = positive; UNCERTAIN counted per label value; Cohen's kappa between the labellers).
+Labelling needs real captures first (the committed ones are placeholders).
+
 Without independent labels there are no TP/TN/FP/FN to report; these are verdict counts so the share of
 UNCERTAIN is visible. UNCERTAIN is never dropped.
 
@@ -112,7 +117,7 @@ modes were not measured: no `GEMINI_API_KEY` was available. One live Pack call t
 ## Reproduce
 
 ```sh
-python -m pytest                                                     # 135 passed, 1 skipped
+python -m pytest                                                     # 141 passed, 1 skipped
 python -m orchestration.run --all                                    # the 100-unit table above
 python -m orchestration.run --all --cases data/input/my_cases.json   # the Pod's 6 cases
 ```

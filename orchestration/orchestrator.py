@@ -26,7 +26,7 @@ from shared.utils.schema import errors as schema_errors
 
 from .clients import AgentRejected, AgentTimeout, AgentUnavailable, client_for, load_manifest
 from .rollup import derive_final_outcome, derive_status, effective
-from .store import EvidenceConflict, MemoryStore
+from .store import EvidenceConflict, MemoryStore, TenantConflict
 
 ROOT = Path(__file__).resolve().parents[1]
 logger = get_logger("orchestrator")
@@ -123,7 +123,7 @@ def new_workflow(case: dict, flow: dict) -> dict:
 def _previous_evidence(wf: dict, upto: int, store) -> list[dict]:
     out = []
     for sr in wf["stage_results"][:upto]:
-        if sr["record_id"] and (rec := store.get_evidence(sr["record_id"])):
+        if sr["record_id"] and (rec := store.get_evidence(sr["record_id"], wf["org_id"])):
             out.append(rec)
     return out
 
@@ -196,7 +196,8 @@ def _run_stage(wf: dict, sr: dict, idx: int, opts: dict, store, client) -> dict 
     try:
         store.put_evidence(ev)
     except EvidenceConflict as exc:  # an agent reused a record_id for different content: reject, never overwrite
-        err = error_obj("invalid_output", str(exc), retryable=False, stage=stage)
+        code = "tenant_mismatch" if isinstance(exc, TenantConflict) else "invalid_output"
+        err = error_obj(code, str(exc), retryable=False, stage=stage)
         _log(wf, "invalid_output", stage, err["message"])
         out = pending_output(request, code=err["code"], message=err["message"], retryable=False, agent_id=sr["agent_id"])
         ev = out["evidence"]
@@ -224,7 +225,7 @@ def _run_stage(wf: dict, sr: dict, idx: int, opts: dict, store, client) -> dict 
 
 
 def _finalize(wf: dict, store) -> dict:
-    evidence = {rid: store.get_evidence(rid) for rid in wf["evidence_references"]}
+    evidence = {rid: store.get_evidence(rid, wf["org_id"]) for rid in wf["evidence_references"]}
     status, reason = derive_status(wf, evidence)
     _set_status(wf, status, reason)
     wf["final_outcome"] = derive_final_outcome(wf, evidence, status)
@@ -240,7 +241,7 @@ def _stale_reason(wf: dict, idx: int, store) -> str | None:
     when an override on an earlier record was made at or after this stage finished (it judged the old verdict).
     """
     sr = wf["stage_results"][idx]
-    rec = store.get_evidence(sr["record_id"]) if sr.get("record_id") else None
+    rec = store.get_evidence(sr["record_id"], wf["org_id"]) if sr.get("record_id") else None
     if rec is None:
         return None
     current = [s["record_id"] for s in wf["stage_results"][:idx] if s.get("record_id")]
@@ -292,7 +293,7 @@ def advance(wf: dict, flow: dict, store, clients: dict | None = None) -> dict:
 def run_workflow(case: dict, flow: dict | None = None, store=None, clients: dict | None = None) -> dict:
     """Start (or continue) the workflow for a case. Idempotent: an existing workflow is advanced, not duplicated."""
     flow, store = flow or load_flow(), store or MemoryStore()
-    wf = store.load_workflow(workflow_id_for(case)) or new_workflow(case, flow)
+    wf = store.load_workflow(workflow_id_for(case), case["org_id"]) or new_workflow(case, flow)
     return advance(wf, flow, store, clients)
 
 
@@ -317,7 +318,9 @@ def apply_override(workflow_id: str, store, *, record_id: str, new_verdict: str,
         raise KeyError(workflow_id)
     if record_id not in wf["evidence_references"]:
         raise ValueError(f"{record_id} is not evidence in {workflow_id}")
-    record = store.get_evidence(record_id)
+    record = store.get_evidence(record_id, wf["org_id"])
+    if record is None:
+        raise ValueError(f"{record_id} is not evidence of {wf['org_id']}")
     previous_verdict, _ = effective(wf, record)
     earlier = [o for o in wf["overrides"] if o["supersedes"]["record_id"] == record_id]
     entry = {"override_id": f"OVR-{len(wf['overrides']) + 1:03d}",
@@ -336,4 +339,4 @@ def apply_override(workflow_id: str, store, *, record_id: str, new_verdict: str,
 
 def bundle(wf: dict, store) -> dict:
     """The workflow plus every evidence record it references: a self-contained, reviewable export."""
-    return {"workflow": wf, "evidence": {rid: store.get_evidence(rid) for rid in wf["evidence_references"]}}
+    return {"workflow": wf, "evidence": {rid: store.get_evidence(rid, wf["org_id"]) for rid in wf["evidence_references"]}}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -41,7 +42,7 @@ def lookup_pack_order(subject_id: str, org_id: str, input_dir: Path | None = Non
     Raises:
         LookupError: If subject is unknown or belongs to a different tenant.
     """
-    input_dir = input_dir or (REPO_ROOT / "data" / "input")
+    input_dir = input_dir or Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input"))
     custom_csv = input_dir / "pack_orders.csv"
 
     known_units: dict[str, set[str]] = {}  # unit_id -> set of org_ids

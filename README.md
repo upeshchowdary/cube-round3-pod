@@ -44,7 +44,20 @@ Details: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`INTEGRATION-GUIDE.md`](INTEGR
 
 ## Quick setup and how to run
 
-Requires Python 3.11+.
+Requires Python 3.11+ and, for the UI, Node.js 20.19+ (22 LTS recommended). No API keys are needed.
+
+**Any OS (Windows, macOS, Linux), no `make` needed:**
+
+```sh
+git clone https://github.com/upeshchowdary/cube-round3-pod.git && cd cube-round3-pod
+python scripts/dev.py setup     # .venv + Python deps + .env + UI deps (npm ci)
+python scripts/dev.py test      # the whole test suite
+python scripts/dev.py run       # every sample workflow + the Pod's own cases -> out/
+python scripts/dev.py up        # API on :8100 + UI on :5173 together; open http://localhost:5173/overview
+python scripts/dev.py doctor    # if something does not start: checks Python, Node, venv and ports
+```
+
+(On macOS/Linux use `python3` if `python` is not 3.11+.) **With `make`** (macOS/Linux, or Git Bash on Windows):
 
 ```sh
 make setup            # venv + dependencies + .env
@@ -52,11 +65,12 @@ make test             # integration, end-to-end, failure, UNCERTAIN, override an
 make run              # all sample workflows end to end -> out/workflows/*.json and out/evidence/*.json
 make case UNIT=UNIT-0014 ORG=org_demo_alpha     # one workflow, in full
 make serve            # orchestrator API on :8100 (POST /workflows, GET /workflows/{id}, GET /health)
+make up               # API + UI together (run `cd ui && npm ci` once first)
 ```
 
 **Pod 05:** all five stages run the members' Round 2 agents (no organiser stub left). With no API keys they run in their offline modes, and every record's `model` says so: Receiving and Pack replay the CSV observations (`csv-replay`), Prep and Recovery are deterministic rules (`rules`), Returns replays cassettes (the 8 committed ones are hand-authored over placeholder images: `synthetic-cassette`). Live model modes and their keys are in `.env.example`. What each agent really is: [`ARCHITECTURE.md` › Pod 05 architecture](ARCHITECTURE.md#pod-05-architecture); numbers and limits: [`docs/evaluation.md`](docs/evaluation.md).
 
-UI: `uvicorn orchestration.api:app --port 8100`, then `cd ui && npm ci && npm run dev` (Vite proxies `/api` to the orchestrator). On Windows use `.venv\Scripts\python -m …` in place of `.venv/bin/…`.
+UI by hand: `python -m uvicorn orchestration.api:app --port 8100` (from the venv), then `cd ui && npm ci && npm run dev` (Vite proxies `/api` to the orchestrator; set `ORCH_API_URL` if the API is on another port). On Windows the venv's Python is `.venv\Scripts\python`, on macOS/Linux `.venv/bin/python`. Keys and modes you put in `.env` are loaded by every agent and the orchestrator; a real environment variable wins over `.env`.
 
 Run an agent as its own service:
 

@@ -3,6 +3,10 @@
 MemoryStore: tests and library use. FileStore: the CLI and API (JSON files under out/).
 Swap in a database by implementing the same four methods. Evidence is IMMUTABLE: a record_id, once written,
 can only be written again with identical content.
+
+Tenancy is enforced here too, not only in the orchestrator (D-016): every read takes an optional `org_id` and returns
+nothing for another org's workflow or record, and a write that would reuse another org's record_id or workflow_id is
+refused as a TenantConflict.
 """
 from __future__ import annotations
 
@@ -15,29 +19,63 @@ class EvidenceConflict(Exception):
     pass
 
 
+class TenantConflict(EvidenceConflict):
+    """A write would place one org's data under an id that already belongs to another org."""
+
+
+def _org_of_record(record: dict) -> str | None:
+    return (record.get("subject") or {}).get("org_id")
+
+
 class MemoryStore:
     def __init__(self) -> None:
         self.workflows: dict[str, dict] = {}
         self.evidence: dict[str, dict] = {}
 
-    def load_workflow(self, workflow_id: str) -> dict | None:
+    # -- raw access (no tenancy); subclasses override these two
+    def _read_workflow(self, workflow_id: str) -> dict | None:
         wf = self.workflows.get(workflow_id)
         return json.loads(json.dumps(wf)) if wf else None
 
-    def save_workflow(self, wf: dict) -> None:
-        self.workflows[wf["workflow_id"]] = json.loads(json.dumps(wf))
-
-    def list_workflows(self) -> list[dict]:
-        return [json.loads(json.dumps(wf)) for wf in self.workflows.values()]
-
-    def get_evidence(self, record_id: str) -> dict | None:
+    def _read_evidence(self, record_id: str) -> dict | None:
         return self.evidence.get(record_id)
 
+    # -- tenant-scoped interface
+    def load_workflow(self, workflow_id: str, org_id: str | None = None) -> dict | None:
+        wf = self._read_workflow(workflow_id)
+        return wf if wf and (org_id is None or wf["org_id"] == org_id) else None
+
+    def save_workflow(self, wf: dict) -> None:
+        existing = self._read_workflow(wf["workflow_id"])
+        if existing and existing["org_id"] != wf["org_id"]:
+            raise TenantConflict(f"workflow {wf['workflow_id']} belongs to another org")
+        self._write_workflow(wf)
+
+    def list_workflows(self, org_id: str | None = None) -> list[dict]:
+        return [wf for wf in self._all_workflows() if org_id is None or wf["org_id"] == org_id]
+
+    def get_evidence(self, record_id: str, org_id: str | None = None) -> dict | None:
+        rec = self._read_evidence(record_id)
+        return rec if rec and (org_id is None or _org_of_record(rec) == org_id) else None
+
     def put_evidence(self, record: dict) -> None:
-        existing = self.evidence.get(record["record_id"])
+        existing = self._read_evidence(record["record_id"])
+        if existing and _org_of_record(existing) != _org_of_record(record):
+            raise TenantConflict(f"{record['record_id']} already belongs to another org; refusing a cross-tenant write")
         if existing and existing["content_hash"] != record["content_hash"]:
             raise EvidenceConflict(f"{record['record_id']} already exists with different content; evidence is immutable")
-        self.evidence.setdefault(record["record_id"], record)
+        if not existing:
+            self._write_evidence(record)
+
+    # -- raw writes / listing
+    def _write_workflow(self, wf: dict) -> None:
+        self.workflows[wf["workflow_id"]] = json.loads(json.dumps(wf))
+
+    def _write_evidence(self, record: dict) -> None:
+        self.evidence[record["record_id"]] = record
+
+    def _all_workflows(self) -> list[dict]:
+        return [json.loads(json.dumps(wf)) for wf in self.workflows.values()]
 
 
 class FileStore(MemoryStore):
@@ -47,26 +85,22 @@ class FileStore(MemoryStore):
         (self.root / "workflows").mkdir(parents=True, exist_ok=True)
         (self.root / "evidence").mkdir(parents=True, exist_ok=True)
 
-    def load_workflow(self, workflow_id: str) -> dict | None:
+    def _read_workflow(self, workflow_id: str) -> dict | None:
         p = self.root / "workflows" / f"{workflow_id}.json"
         return json.loads(p.read_text()) if p.exists() else None
 
-    def save_workflow(self, wf: dict) -> None:
+    def _write_workflow(self, wf: dict) -> None:
         p = self.root / "workflows" / f"{wf['workflow_id']}.json"
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(wf, indent=2))
         tmp.replace(p)  # atomic: a crash never leaves half a workflow
 
-    def list_workflows(self) -> list[dict]:
+    def _all_workflows(self) -> list[dict]:
         return [json.loads(p.read_text()) for p in sorted((self.root / "workflows").glob("*.json"))]
 
-    def get_evidence(self, record_id: str) -> dict | None:
+    def _read_evidence(self, record_id: str) -> dict | None:
         p = self.root / "evidence" / f"{record_id}.json"
         return json.loads(p.read_text()) if p.exists() else None
 
-    def put_evidence(self, record: dict) -> None:
-        existing = self.get_evidence(record["record_id"])
-        if existing and existing["content_hash"] != record["content_hash"]:
-            raise EvidenceConflict(f"{record['record_id']} already exists with different content; evidence is immutable")
-        if not existing:
-            (self.root / "evidence" / f"{record['record_id']}.json").write_text(json.dumps(record, indent=2))
+    def _write_evidence(self, record: dict) -> None:
+        (self.root / "evidence" / f"{record['record_id']}.json").write_text(json.dumps(record, indent=2))

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:   # "Run workflow" button in the Actions tab
 
 permissions:
   contents: read
@@ -17,12 +18,33 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
-      - name: Contract, routing, roll-up, end-to-end, fail-open and HTTP tests
-        run: python -m pytest
+      - name: make setup (clean-clone install, as the handbook runs it)
+        run: make setup
+      - name: make test (contract, routing, roll-up, end-to-end, fail-open, tenancy and HTTP tests)
+        run: make test
+      - name: make run (every sample workflow end to end)
+        run: make run
+      - name: The Pod's own cases end to end
+        run: .venv/bin/python -m orchestration.run --all --cases data/input/my_cases.json
       - name: Fail if a secret-looking file is committed
         run: |
           bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
           if [ -n "$bad" ]; then echo "::error::Committed env file(s): $bad"; exit 1; fi
           if git grep -nIE '(sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)' -- . ':!*.md' ':!.github/workflows/ci.yml'; then
             echo "::error::Possible secret committed"; exit 1; fi
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - name: Type-check and production build
+        run: npm run build

@@ -56,7 +56,11 @@ from shared.utils.server import make_app
 STAGE = "returns"
 AGENT_ID = "returns-manager-rtn0045@2"
 
-INPUT_DIR = Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input"))
+def _input_dir() -> Path:
+    """Read INPUT_DIR per call, as the orchestrator and the other agents do, so both sides resolve the same captures."""
+    return Path(os.environ.get("INPUT_DIR", REPO_ROOT / "data" / "input"))
+
+
 R2_REF_DIR = REPO_ROOT / "agents" / "returns" / "r2" / "reference"
 CASSETTES_DIR = REPO_ROOT / "agents" / "returns" / "cassettes"
 
@@ -83,14 +87,21 @@ def _read_prompt_version() -> str:
     return "1.5.0"
 
 
-def _round2_settings() -> Settings:
+def _round2_settings(mode: str = "replay") -> Settings:
     """Round 2 Settings, with the Pod's LOG_LEVEL convention mapped onto Round 2's.
 
     The Pod documents LOG_LEVEL as DEBUG | INFO | WARNING (`.env.example`, `make run` sets WARNING); Round 2 accepts only
     lower-case debug | info | warning | error and raised a ValidationError on the Pod's values, which crashed this agent.
+
+    RETURNS_LIVE_MODEL picks the Gemini model for live/record mode only. Replay keeps the model the cassette was recorded
+    with (setting RM_JUDGMENT_MODEL globally made every replay fail with schema_error).
     """
     level = os.environ.get("LOG_LEVEL", "info").strip().lower()
-    return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info")
+    overrides = {}
+    live_model = os.environ.get("RETURNS_LIVE_MODEL")
+    if mode != "replay" and live_model:
+        overrides = {"rm_judgment_model": live_model, "rm_escalation_model": live_model}
+    return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info", **overrides)
 
 
 ROUND2_COMMIT = _read_round2_commit()
@@ -103,10 +114,11 @@ def handle(request: dict) -> dict:
 
     subject_id = request["subject"]["subject_id"]
     org_id = request["subject"]["org_id"]
+    input_dir = _input_dir()
 
     # 1. Tenancy and Order lookup (§4.1)
     # Raises LookupError directly if subject is unknown or belongs to another tenant
-    order = lookup_order(subject_id, org_id, input_dir=INPUT_DIR, r2_ref_dir=R2_REF_DIR)
+    order = lookup_order(subject_id, org_id, input_dir=input_dir, r2_ref_dir=R2_REF_DIR)
 
     if not order.category:
         return pending_output(
@@ -119,7 +131,7 @@ def handle(request: dict) -> dict:
 
     # 2. Captures discovery and validation (§4.2)
     try:
-        captures = resolve_captures(request, input_dir=INPUT_DIR)
+        captures = resolve_captures(request, input_dir=input_dir)
     except CaptureError as exc:
         return pending_output(
             request,
@@ -142,7 +154,7 @@ def handle(request: dict) -> dict:
     # 4. Model client and mode configuration (§4.4)
     mode = os.environ.get("RETURNS_MODEL_MODE", "replay")
     try:
-        settings = _round2_settings()
+        settings = _round2_settings(mode)
     except Exception as exc:  # a configuration problem is recorded, never a crash of the agent
         return pending_output(request, code="model_not_configured", message=f"Round 2 settings invalid: {exc}"[:500],
                               retryable=False, agent_id=AGENT_ID)
@@ -228,7 +240,7 @@ def handle(request: dict) -> dict:
     )
 
     # 6. Run Round 2 pipeline (§4.4)
-    transport = LocalCaptureTransport(INPUT_DIR)
+    transport = LocalCaptureTransport(input_dir)
 
     async def _execute_pipeline() -> RowResult:
         headers = {"User-Agent": "ReturnsManagerRound3Adapter/1.0"}
