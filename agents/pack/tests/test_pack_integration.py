@@ -50,7 +50,11 @@ def test_pack_idempotency():
     out1 = handle(req)
     out2 = handle(req)
     assert out1["evidence"]["record_id"] == out2["evidence"]["record_id"]
-    assert out1["evidence"]["content_hash"] == out2["evidence"]["content_hash"]
+    # produced_at (second resolution) and the measured latency_ms change from call to call, and both are in the
+    # content hash; everything else (checks, decision, inputs, payload) must be identical.
+    per_call = ("produced_at", "latency_ms", "content_hash")
+    same = lambda ev: {k: v for k, v in ev.items() if k not in per_call}  # noqa: E731
+    assert same(out1["evidence"]) == same(out2["evidence"])
 
 
 def test_pack_traces_upstream_evidence():
