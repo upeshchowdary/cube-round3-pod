@@ -889,10 +889,11 @@ function Shell() {
           >
             {sidebarCollapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
           </button>
-          <div className="brand-mark">C</div>
+          {/* Collapsed: the leaf mark alone. Expanded: the full wordmark (it already contains the leaf). */}
+          <img className="brand-mark" src="/logo-mark.png" alt="" aria-hidden="true" />
           <div className="brand-copy">
-            <div className="brand-title">CUBE</div>
-            <div className="brand-subtitle">Pod 05</div>
+            <img className="brand-wordmark" src="/logo-sydon.webp" alt="Sydon" />
+            <div className="brand-subtitle">CUBE · Pod 05</div>
           </div>
         </div>
 
@@ -2454,13 +2455,16 @@ function EvidencePage() {
 
   // One node per current stage record, laid out left to right; edges are the records' own upstream_refs.
   const current = activeWorkflow.stage_results.filter((s) => s.record_id)
-  const nodes = current.map((s, i) => ({ id: s.record_id as string, stage: s.stage, verdict: s.verdict, x: 110 + i * 175, y: 200 }))
+  // 215px apart: a node is capped at 200px (long Prep ids are ellipsised, full id on hover), so neighbours never overlap.
+  const STEP = 215
+  const nodes = current.map((s, i) => ({ id: s.record_id as string, stage: s.stage, verdict: s.verdict, x: 115 + i * STEP, y: 200 }))
   const pos = new Map(nodes.map((n) => [n.id, n]))
   const edges: Array<[string, string]> = []
   nodes.forEach((n) => {
     for (const up of bundle?.evidence[n.id]?.upstream_refs ?? []) if (pos.has(up)) edges.push([up, n.id])
   })
-  const outcome = { x: 110 + Math.max(0, nodes.length - 1) * 175, y: 60 }
+  const outcome = { x: 115 + Math.max(0, nodes.length - 1) * STEP, y: 60 }
+  const canvasWidth = outcome.x + 115 // on a narrow screen the panel scrolls sideways instead of cutting off Recovery
 
   return (
     <PageTemplate title="Evidence Explorer" subtitle="Each arrow is an upstream_ref recorded in the evidence itself">
@@ -2482,46 +2486,48 @@ function EvidencePage() {
       </div>
 
       <div className="evidence-graph-panel">
-        {/* No viewBox: SVG user units are CSS pixels, the same frame the absolutely positioned nodes use. */}
-        <svg className="evidence-svg" aria-hidden="true">
-          {edges.map(([a, b]) => {
-            const from = pos.get(a)!
-            const to = pos.get(b)!
-            const lift = (to.x - from.x) / 4
-            return (
-              <path
-                key={`${a}-${b}`}
-                d={`M ${from.x} ${from.y} Q ${(from.x + to.x) / 2} ${from.y + lift} ${to.x} ${to.y}`}
-                fill="none"
-                stroke="rgba(47, 143, 104, 0.45)"
-                strokeWidth="2"
-              />
-            )
-          })}
-          {(activeWorkflow.final_outcome?.contributing_records ?? []).map((rid) =>
-            pos.has(rid) ? (
-              <line key={`out-${rid}`} x1={pos.get(rid)!.x} y1={pos.get(rid)!.y} x2={outcome.x} y2={outcome.y}
-                    stroke="rgba(96, 102, 97, 0.25)" strokeDasharray="4 4" strokeWidth="1.5" />
-            ) : null,
-          )}
-        </svg>
+        <div className="evidence-graph-canvas" style={{ minWidth: canvasWidth }}>
+          {/* No viewBox: SVG user units are CSS pixels, the same frame the absolutely positioned nodes use. */}
+          <svg className="evidence-svg" aria-hidden="true">
+            {edges.map(([a, b]) => {
+              const from = pos.get(a)!
+              const to = pos.get(b)!
+              const lift = (to.x - from.x) / 4
+              return (
+                <path
+                  key={`${a}-${b}`}
+                  d={`M ${from.x} ${from.y} Q ${(from.x + to.x) / 2} ${from.y + lift} ${to.x} ${to.y}`}
+                  fill="none"
+                  stroke="rgba(47, 143, 104, 0.45)"
+                  strokeWidth="2"
+                />
+              )
+            })}
+            {(activeWorkflow.final_outcome?.contributing_records ?? []).map((rid) =>
+              pos.has(rid) ? (
+                <line key={`out-${rid}`} x1={pos.get(rid)!.x} y1={pos.get(rid)!.y} x2={outcome.x} y2={outcome.y}
+                      stroke="rgba(96, 102, 97, 0.25)" strokeDasharray="4 4" strokeWidth="1.5" />
+              ) : null,
+            )}
+          </svg>
 
-        <div className="graph-node-grid">
-          {nodes.map((node) => (
-            <div
-              key={node.id}
-              className="graph-node clickable-node"
-              style={{ left: `${node.x}px`, top: `${node.y}px` }}
-              onClick={() => bundle?.evidence[node.id] && openEvidenceDrawer(bundle.evidence[node.id])}
-              title="Click to inspect record"
-            >
-              <div>{node.stage} · {node.verdict}</div>
-              <strong>{node.id}</strong>
+          <div className="graph-node-grid">
+            {nodes.map((node) => (
+              <div
+                key={node.id}
+                className="graph-node clickable-node"
+                style={{ left: `${node.x}px`, top: `${node.y}px` }}
+                onClick={() => bundle?.evidence[node.id] && openEvidenceDrawer(bundle.evidence[node.id])}
+                title={`${node.id}: click to inspect the record`}
+              >
+                <div>{node.stage} · {node.verdict}</div>
+                <strong>{node.id}</strong>
+              </div>
+            ))}
+            <div className="graph-node" style={{ left: `${outcome.x}px`, top: `${outcome.y}px` }}>
+              <div>Final Outcome</div>
+              <strong>{activeWorkflow.final_outcome?.outcome ?? '—'}</strong>
             </div>
-          ))}
-          <div className="graph-node" style={{ left: `${outcome.x}px`, top: `${outcome.y}px` }}>
-            <div>Final Outcome</div>
-            <strong>{activeWorkflow.final_outcome?.outcome ?? '—'}</strong>
           </div>
         </div>
       </div>
