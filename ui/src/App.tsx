@@ -2824,7 +2824,7 @@ function AnalyticsPage() {
                 </defs>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="agent" tickLine={false} axisLine={false} dy={6} />
-                <YAxis unit="s" tickLine={false} axisLine={false} tickFormatter={(v: number) => String(Math.round(v * 100) / 100)} />
+                <YAxis unit="s" tickLine={false} axisLine={false} tickFormatter={(v: number) => String(Math.round(v * 1000) / 1000)} />
                 <Tooltip formatter={(v) => [`${v}s`, 'Mean stage time']} />
                 <Area type="monotone" dataKey="latency" name="Mean stage time (s)" stroke="#16a34a" strokeWidth={3}
                       fill="url(#stageTimeFill)" dot={{ r: 4, fill: '#fff', stroke: '#16a34a', strokeWidth: 2 }} activeDot={{ r: 6 }} />
