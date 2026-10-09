@@ -1,7 +1,7 @@
 # Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo. See docs/deploy-render.md.
 services:
   - type: web
-    name: cube-pod05
+    name: upesh-cube-pod05
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile

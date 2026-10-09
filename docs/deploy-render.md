@@ -8,7 +8,7 @@ One Render **web service** runs everything: the built UI at `/` and the orchestr
 2. Go to **New → Blueprint** and pick this repository. Render reads `render.yaml`.
 3. Pick the branch to deploy (`main`).
 4. Render asks for `GEMINI_API_KEY` and `GROQ_API_KEY`. Both are optional; leave them blank to run every agent in replay/rules mode. **Paste keys only here, never in a file.**
-5. Click **Apply**. The first build takes about 5 minutes. The site is then live at `https://cube-pod05.onrender.com` (or the name Render gives it).
+5. Click **Apply**. The first build takes about 5 minutes. The site is then live at `https://upesh-cube-pod05.onrender.com` (if that name is taken, Render adds a short suffix). The name comes from `name:` in `render.yaml` and is fixed when the service is created: renaming the service later does not change the link.
 
 After that, every push to the branch redeploys on its own.
 
