@@ -1,0 +1,50 @@
+{
+  "product": {
+    "title": "Nintendo Switch Lite (Grey)",
+    "sku": "SKU-NSW-LITE-GRY",
+    "asin": "B0DEMONSL3",
+    "category": "electronics",
+    "colour": "grey",
+    "variant": "standard",
+    "components": [
+      "console"
+    ]
+  },
+  "route": "mfn",
+  "returned": true,
+  "receiving": {
+    "supplier": "Nintendo authorised distributor",
+    "po_number": "PO-DEMO-1003",
+    "cartons_ordered": 1,
+    "cartons_received": 1,
+    "units_per_carton_ordered": 6,
+    "units_per_carton_counted": 6,
+    "qty_ordered": 6,
+    "qty_received": 6,
+    "identity_match": "yes",
+    "carton_damage": "none",
+    "unit_damage": "none",
+    "quality_flags": []
+  },
+  "pack": {
+    "channel": "amazon_mfn",
+    "order_lines": [
+      {
+        "sku": "SKU-NSW-LITE-GRY",
+        "qty": 1
+      }
+    ],
+    "operator_verdict": "seal"
+  },
+  "returns": {
+    "parts_list": [
+      "console"
+    ]
+  },
+  "fees": [
+    {
+      "charge_type": "refund_issued_item_not_returned",
+      "amount_usd": 199.99
+    }
+  ]
+}

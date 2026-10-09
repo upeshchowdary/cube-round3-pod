@@ -1,0 +1,54 @@
+{
+  "product": {
+    "title": "Nintendo Switch OLED Model - The Legend of Zelda: Tears of the Kingdom Edition",
+    "sku": "SKU-NSW-OLED-ZELDA",
+    "asin": "B0DEMONSW2",
+    "category": "electronics",
+    "colour": "gold and green (Zelda edition)",
+    "variant": "OLED 64GB",
+    "components": [
+      "console",
+      "dock",
+      "Joy-Con controllers"
+    ]
+  },
+  "route": "mfn",
+  "returned": true,
+  "receiving": {
+    "supplier": "Nintendo authorised distributor",
+    "po_number": "PO-DEMO-1002",
+    "cartons_ordered": 1,
+    "cartons_received": 1,
+    "units_per_carton_ordered": 1,
+    "units_per_carton_counted": 1,
+    "qty_ordered": 1,
+    "qty_received": 1,
+    "identity_match": "yes",
+    "carton_damage": "none",
+    "unit_damage": "none",
+    "quality_flags": []
+  },
+  "pack": {
+    "channel": "shopify",
+    "order_lines": [
+      {
+        "sku": "SKU-NSW-OLED-ZELDA",
+        "qty": 1
+      }
+    ],
+    "operator_verdict": "seal"
+  },
+  "returns": {
+    "parts_list": [
+      "console",
+      "dock",
+      "Joy-Con controllers"
+    ]
+  },
+  "fees": [
+    {
+      "charge_type": "inbound_defect_fee",
+      "amount_usd": 3.0
+    }
+  ]
+}

@@ -62,6 +62,7 @@ python scripts/dev.py up --dataset <name>       # the UI on that dataset
 Running live on someone else's data (e.g. the judges'): [`docs/live-demo-runbook.md`](docs/live-demo-runbook.md).
 Hosting the demo on Render (UI + API in one service): [`docs/deploy-render.md`](docs/deploy-render.md).
 Real product photos through Pack and Returns (10 units, Gemini answers recorded from a real run): [`data/input/RETURNS_PHOTOS.md`](data/input/RETURNS_PHOTOS.md).
+Live Run (local): enter one product and its photos at <http://localhost:5173/live>, press Start and watch the real agents process it with AI on the photos; five ready-made products in [`live_demo_sets/`](live_demo_sets/README.md).
 
 (On macOS/Linux use `python3` if `python` is not 3.11+.) **With `make`** (macOS/Linux, or Git Bash on Windows):
 

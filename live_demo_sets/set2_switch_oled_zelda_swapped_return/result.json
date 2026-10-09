@@ -1,0 +1,172 @@
+{
+  "run_id": "LIVE-021423-10A0",
+  "state": "done",
+  "total_seconds": 75,
+  "notes": [],
+  "status": "BLOCKED",
+  "final": {
+    "outcome": "EXCEPTION",
+    "verdict": "FAIL",
+    "reason": "Failed verdict from: returns; no claim recommended. Flagged for review: receiving, returns.",
+    "claimable_usd": null,
+    "needs_human": true
+  },
+  "stages": [
+    {
+      "stage": "receiving",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "pending_review",
+      "seconds": 15.1,
+      "model": "gemini-3.8-flash",
+      "calls": 1,
+      "reason": "Shipment inspection contains 1 parameter(s) requiring human operator review.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "UNCERTAIN",
+          "detail": "Observed SKU could not be clearly verified from visual evidence."
+        },
+        {
+          "check": "carton_count",
+          "verdict": "PASS",
+          "detail": "Carton count (1) matches PO expected (1)."
+        },
+        {
+          "check": "quantity",
+          "verdict": "PASS",
+          "detail": "Unit quantity (1) matches PO expected (1)."
+        },
+        {
+          "check": "carton_damage",
+          "verdict": "PASS",
+          "detail": "No carton damage observed."
+        },
+        {
+          "check": "unit_damage",
+          "verdict": "PASS",
+          "detail": "No unit damage observed."
+        },
+        {
+          "check": "quality_flags",
+          "verdict": "PASS",
+          "detail": "No quality exceptions flagged."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "prep",
+      "state": "skipped",
+      "skipped_reason": "route='mfn' not in ['fba']",
+      "verdict": null,
+      "outcome": null,
+      "seconds": 0.0,
+      "model": null,
+      "calls": null,
+      "reason": null,
+      "checks": [],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "pack",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "PASS",
+      "outcome": "seal",
+      "seconds": 1.5,
+      "model": "qwen/qwen3.8-27b",
+      "calls": 1,
+      "reason": "Every expected SKU is present at the expected quantity with no extra or foreign items.",
+      "checks": [
+        {
+          "check": "items_present",
+          "verdict": "PASS",
+          "detail": "all expected items accounted for"
+        },
+        {
+          "check": "quantities_correct",
+          "verdict": "PASS",
+          "detail": "quantities match expected counts"
+        },
+        {
+          "check": "no_extra_items",
+          "verdict": "PASS",
+          "detail": "no extra items or decoys found"
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "returns",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "FAIL",
+      "outcome": "pending_review",
+      "seconds": 55.4,
+      "model": "gemini-3.8-flash",
+      "calls": 2,
+      "reason": "R03: Wrong item returned (visual identity discrepancy: returned unit model does not match sold SKU). Auto-disapproved. Rules engine route: dispose, human sign-off required. review: essential_component_uncertain, listing_blockers_undetermined, escalation_triggered. sign-off: S01_dispose_always. Evaluated from single photograph; single-angle view verified. Confidence calibrated accordingly.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "FAIL",
+          "detail": "Not the ordered item SKU-NSW-OLED-ZELDA (P1)."
+        },
+        {
+          "check": "completeness",
+          "verdict": "UNCERTAIN",
+          "detail": "Not visible in the provided photos: console;dock;Joy-Con controllers."
+        },
+        {
+          "check": "condition",
+          "verdict": "PASS",
+          "detail": "Used - Acceptable. Rubric: \"The signs of wear can include scratches, dents and other aesthetic problems.\" Functional test not performed."
+        }
+      ],
+      "error": null,
+      "reference_source": "pack",
+      "disposition": "dispose",
+      "charges": null
+    },
+    {
+      "stage": "recovery",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "insufficient_evidence",
+      "seconds": 0.0,
+      "model": "rules",
+      "calls": 0,
+      "reason": "1 charge(s) audited by rules: 0 contradicted, 1 silent",
+      "checks": [
+        {
+          "check": "charge_fee_live_021423_10a0_1",
+          "verdict": "UNCERTAIN",
+          "detail": "Receiving evidence RCV-LIVE-021423-10A0 is uncertain"
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": [
+        {
+          "charge": "inbound_defect_fee",
+          "amount": 3.0,
+          "position": "SILENT",
+          "why": "Receiving evidence RCV-LIVE-021423-10A0 is uncertain"
+        }
+      ]
+    }
+  ]
+}

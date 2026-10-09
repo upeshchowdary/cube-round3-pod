@@ -1,0 +1,175 @@
+{
+  "run_id": "LIVE-021838-77B8",
+  "state": "done",
+  "total_seconds": 244,
+  "notes": [
+    "Returns: Gemini key 1 failed (The model call failed (schema_error). Insufficient evidence: no grade and no route were computed; held for a person to r). Retrying with key 2.",
+    "Returns: Gemini key 2 failed (The model call failed (schema_error). Insufficient evidence: no grade and no route were computed; held for a person to r). Retrying with key 3."
+  ],
+  "status": "BLOCKED",
+  "final": {
+    "outcome": "NEEDS_REVIEW",
+    "verdict": "UNCERTAIN",
+    "reason": "Human review requested by: pack, returns.",
+    "claimable_usd": null,
+    "needs_human": true
+  },
+  "stages": [
+    {
+      "stage": "receiving",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "PASS",
+      "outcome": "accept",
+      "seconds": 0.0,
+      "model": "csv-replay",
+      "calls": 0,
+      "reason": "Shipment fully complies with PO specifications and receiving condition standards.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "PASS",
+          "detail": "Observed SKU matches expected PO specification."
+        },
+        {
+          "check": "carton_count",
+          "verdict": "PASS",
+          "detail": "Carton count (1) matches PO expected (1)."
+        },
+        {
+          "check": "quantity",
+          "verdict": "PASS",
+          "detail": "Unit quantity (6) matches PO expected (6)."
+        },
+        {
+          "check": "carton_damage",
+          "verdict": "PASS",
+          "detail": "No carton damage observed."
+        },
+        {
+          "check": "unit_damage",
+          "verdict": "PASS",
+          "detail": "No unit damage observed."
+        },
+        {
+          "check": "quality_flags",
+          "verdict": "PASS",
+          "detail": "No quality exceptions flagged."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "prep",
+      "state": "skipped",
+      "skipped_reason": "route='mfn' not in ['fba']",
+      "verdict": null,
+      "outcome": null,
+      "seconds": 0.0,
+      "model": null,
+      "calls": null,
+      "reason": null,
+      "checks": [],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "pack",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "pending_review",
+      "seconds": 1.2,
+      "model": "qwen/qwen3.8-27b",
+      "calls": 1,
+      "reason": "There are no visible text, SKU labels, or packaging to confirm that the item is 'SKU-NSW-LITE-GRY'. The item is a handheld console which visually fits the description, but without a label, a match cannot be definitively confirmed based on visual evidence alone.",
+      "checks": [
+        {
+          "check": "items_present",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: There are no visible text, SKU labels, or packaging to confirm that the item is 'SKU-NSW-LITE-GRY'. The item is a handheld console which visually fits the description, but without a label, a match cannot be definitively confirmed based on visual evidence alone."
+        },
+        {
+          "check": "quantities_correct",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: There are no visible text, SKU labels, or packaging to confirm that the item is 'SKU-NSW-LITE-GRY'. The item is a handheld console which visually fits the description, but without a label, a match cannot be definitively confirmed based on visual evidence alone."
+        },
+        {
+          "check": "no_extra_items",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: There are no visible text, SKU labels, or packaging to confirm that the item is 'SKU-NSW-LITE-GRY'. The item is a handheld console which visually fits the description, but without a label, a match cannot be definitively confirmed based on visual evidence alone."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "returns",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "pending_review",
+      "seconds": 102.2,
+      "model": "gemini-3.8-flash",
+      "calls": 2,
+      "reason": "R03b+R10: Identity uncertain (missing angle). all listed parts present. condition Used - Acceptable; functional test not performed. rules engine provisional route dispose (R03b+R10: identity_unverified; provisional damage or dirt makes the item unlistable as-is; salvage 500 <= 5000). review: identity_unverified, listing_blockers_undetermined. sign-off: S01_dispose_always. Evaluated from single photograph; single-angle view verified. Confidence calibrated accordingly.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "UNCERTAIN",
+          "detail": "Identity not verified: missing angle."
+        },
+        {
+          "check": "completeness",
+          "verdict": "PASS",
+          "detail": "All expected parts present: console."
+        },
+        {
+          "check": "condition",
+          "verdict": "PASS",
+          "detail": "Used - Acceptable. Rubric: \"the item is fairly worn\" Functional test not performed."
+        }
+      ],
+      "error": null,
+      "reference_source": "pack",
+      "disposition": "dispose",
+      "charges": null
+    },
+    {
+      "stage": "recovery",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "insufficient_evidence",
+      "seconds": 0.0,
+      "model": "rules",
+      "calls": 0,
+      "reason": "1 charge(s) audited by rules: 0 contradicted, 1 silent",
+      "checks": [
+        {
+          "check": "charge_fee_live_021838_77b8_1",
+          "verdict": "UNCERTAIN",
+          "detail": "Returns record RTN-1e5576b45a9f9d99 is UNCERTAIN / pending_review: receipt not verified (finding F-11)"
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": [
+        {
+          "charge": "refund_issued_item_not_returned",
+          "amount": 199.99,
+          "position": "SILENT",
+          "why": "Returns record RTN-1e5576b45a9f9d99 is UNCERTAIN / pending_review: receipt not verified (finding F-11)"
+        }
+      ]
+    }
+  ]
+}

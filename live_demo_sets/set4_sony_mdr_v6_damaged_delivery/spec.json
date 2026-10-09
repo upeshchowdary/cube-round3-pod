@@ -1,0 +1,46 @@
+{
+  "product": {
+    "title": "Sony MDR-V6 Studio Monitor Headphones",
+    "sku": "SKU-SONY-MDRV6",
+    "asin": "B0DEMOMDR4",
+    "category": "electronics",
+    "colour": "black",
+    "variant": "standard",
+    "components": [
+      "headphones",
+      "coiled cable"
+    ]
+  },
+  "route": "mfn",
+  "returned": false,
+  "receiving": {
+    "supplier": "Sony audio distributor",
+    "po_number": "PO-DEMO-1004",
+    "cartons_ordered": 1,
+    "cartons_received": 1,
+    "units_per_carton_ordered": 1,
+    "units_per_carton_counted": 1,
+    "qty_ordered": 1,
+    "qty_received": 1,
+    "identity_match": "yes",
+    "carton_damage": "crushing",
+    "unit_damage": "none",
+    "quality_flags": []
+  },
+  "pack": {
+    "channel": "walmart",
+    "order_lines": [
+      {
+        "sku": "SKU-SONY-MDRV6",
+        "qty": 1
+      }
+    ],
+    "operator_verdict": "seal"
+  },
+  "fees": [
+    {
+      "charge_type": "inbound_defect_fee",
+      "amount_usd": 2.5
+    }
+  ]
+}
