@@ -107,7 +107,7 @@ def test_full_dataset_for_a_new_unit_reaches_every_agent(tmp_path):
                 r["line_id"] = r["line_id"].replace("0014", "0901")
         write(folder / sample_data.FILES[kind], header, rows)
     rep, out, _ = load(tmp_path, [folder])
-    assert rep.errors == [] and any("UNIT-0901: returned but no photos" in w for w in rep.warnings)
+    assert rep.errors == [] and any("returned unit(s) have no photos (UNIT-0901)" in w for w in rep.warnings)
     wf = dataset.run(out)[0]
     st = by_stage(wf)
     assert st["receiving"]["verdict"] == "PASS" and st["prep"]["verdict"] == "PASS"
@@ -159,6 +159,25 @@ def test_bad_rows_are_reported_by_row_number(tmp_path):
     assert "row 2: qty_received='twenty' is not a whole number" in text
     assert "row 3: duplicate UNIT-0014 in org_demo_alpha" in text
     assert "row 4: unit_id and org_id must not be empty" in text
+
+
+def test_an_empty_file_or_a_header_without_rows_is_refused_plainly(tmp_path):
+    empty = tmp_path / "judge" / "receiving.csv"
+    empty.parent.mkdir(parents=True)
+    empty.write_text("")
+    rep, _, _ = load(tmp_path, [empty])
+    assert rep.errors == ["receiving.csv: the file is empty (not even a header row)"]
+    header, _ = unit_rows("receiving", "UNIT-0014")
+    rep, _, _ = load(tmp_path, [write(tmp_path / "judge2" / "receiving.csv", header, [])])
+    assert any("no data rows" in e for e in rep.errors)
+
+
+def test_units_with_no_runnable_stage_are_named_and_stay_pending(tmp_path):
+    """A fee report alone: Recovery needs the unit's Receiving row, so nothing runs. Say so, never show a blank result."""
+    rep, out, _ = load(tmp_path, [judge_folder(tmp_path, "UNIT-0014", ["fees"])])
+    assert rep.errors == [] and any("1 unit(s) have no stage that can run (UNIT-0014)" in w for w in rep.warnings)
+    wf = dataset.run(out)[0]
+    assert wf["status"] == "PENDING" and wf["final_outcome"] is None
 
 
 def test_agents_refuse_a_misnamed_column_at_runtime_too(tmp_path, monkeypatch):

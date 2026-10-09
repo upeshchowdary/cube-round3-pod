@@ -164,6 +164,9 @@ def load(sources: list[Path], *, name: str, maps: dict[str, str], cats: dict[str
     headers: dict[str, list[str]] = {}
     for f in files:
         header, rows = read_csv(f)
+        if not header:
+            rep.errors.append(f"{f.name}: the file is empty (not even a header row)")
+            continue
         header = [maps.get(h, h) for h in header]
         rows = [{maps.get(k, k): v for k, v in r.items()} for r in rows]
         kind = detect_kind(f, header)
@@ -197,6 +200,8 @@ def load(sources: list[Path], *, name: str, maps: dict[str, str], cats: dict[str
     if "returns" in tables and "category" not in headers["returns"]:
         headers["returns"].append("category")
 
+    if tables and not any(tables.values()):
+        rep.errors.append("every file has a header but no data rows: there is no unit to run")
     out = (root / name).resolve()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name) or out.parent != root.resolve():
         rep.errors.append(f"dataset name {name!r}: use letters, digits, - and _ only")
@@ -220,20 +225,37 @@ def load(sources: list[Path], *, name: str, maps: dict[str, str], cats: dict[str
     if absent:
         rep.notes.append(f"no file for: {', '.join(absent)} (skipped, with that reason, for every unit)")
     live = bool(os.environ.get("GEMINI_API_KEY")) and os.environ.get("RETURNS_LIVE_FALLBACK", "1") != "0"
+    no_photos = []
     for c in cases:
         if not c["returned"]:
             continue
         u, o = c["unit_id"], c["org_id"]
         if not any((out / "input" / u / s).is_dir() for s in ("returns", "receiving", "pack")):
-            rep.warnings.append(f"{u}: returned but no photos; Returns will hold it for a person (no_reference_photo)")
+            no_photos.append(u)
         elif not (ROOT / "agents" / "returns" / "cassettes" / o / f"{u}.jsonl").is_file():
             rep.warnings.append(f"{u}: no recorded Returns answer; " + (
                 f"Gemini judges it live ({os.environ.get('RETURNS_LIVE_MODEL') or 'gemini-3.8-flash'}, free tier 20/day)"
                 if live else "set GEMINI_API_KEY in .env to judge it live, or Returns records no_cassette"))
+    if no_photos:  # one line, not one per unit: a whole dataset without photos would bury every other note
+        shown = ", ".join(no_photos[:6]) + (f" and {len(no_photos) - 6} more" if len(no_photos) > 6 else "")
+        rep.warnings.append(f"{len(no_photos)} returned unit(s) have no photos ({shown}); Returns will hold them for a "
+                            f"person (no_reference_photo). Add them with --photos DIR")
+    idle = [c["unit_id"] for c in cases if not _runs_anything(c)]
+    if idle:
+        rep.warnings.append(f"{len(idle)} unit(s) have no stage that can run ({', '.join(idle[:6])}"
+                            f"{' ...' if len(idle) > 6 else ''}): e.g. a fee report alone, since Recovery needs the "
+                            f"unit's Receiving row. Their workflows stay PENDING")
     for c in cases:
         if sample_data.has("prep", c["unit_id"], c["org_id"]) and sample_data.has("pack", c["unit_id"], c["org_id"]):
             rep.warnings.append(f"{c['unit_id']}: has both a Prep and a Pack row; routed as FBA (Prep)")
     return rep, out, tables
+
+
+def _runs_anything(case: dict) -> bool:
+    """Whether at least one flow step applies to this case once the dataset's skip_stages are taken out."""
+    from .orchestrator import applies, load_flow
+    skip = set(case.get("skip_stages") or [])
+    return any(applies(step, case)[0] and step["stage"] not in skip for step in load_flow()["steps"])
 
 
 def _map_hint(kind: str, header: list[str]) -> str:
@@ -272,7 +294,7 @@ def print_table(wfs: list[dict]) -> None:
     for wf in wfs:
         by = {sr["stage"]: sr for sr in wf["stage_results"]}
         fo = wf.get("final_outcome") or {}
-        final = fo.get("outcome", "")
+        final = fo.get("outcome") or f"{wf['status']} (nothing to run)"
         if fo.get("claimable_usd"):
             final += f" ${fo['claimable_usd']:.2f}"
         rows.append([wf["subject_id"], wf["org_id"], *[cell(by[s]) if s in by else "-" for s in STAGES], final])

@@ -45,7 +45,9 @@ pass).
 | `missing column(s) qty_received (closest: received_qty) ... --map received_qty=qty_received` | Re-run with exactly that `--map` (one per renamed column). Never guess a different column. |
 | `SKU 'X' has no product category ... --category X=<...>` | Add `--category X=electronics` (or toys_games, home_kitchen, beauty_topical, grocery_ingestible, pet). |
 | `row 7: qty_received='twenty' is not a whole number` / `duplicate ...` | Ask the judge which value is meant, fix the cell, re-run. |
-| `returned but no photos` | Returns will hold the unit for a person. Add photos (next section) if you have them. |
+| `N returned unit(s) have no photos (...)` | Returns will hold those units for a person. Add photos (next section) if you have them. |
+| `N unit(s) have no stage that can run` | E.g. a fee report alone: Recovery needs the unit's Receiving row. Ask for the Receiving file too. |
+| `the file is empty` / `no data rows` | The judge's export has no rows. Ask for the file again. |
 | `no recorded Returns answer; Gemini judges it live` | Fine: needs the key and quota. Without a key Returns records `no_cassette`. |
 | `not recognised ... ignored` | The file name and columns match no stage. Rename it (receiving / prep / pack / returns / fees). |
 
