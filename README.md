@@ -60,6 +60,7 @@ python scripts/dev.py up --dataset <name>       # the UI on that dataset
 ```
 
 Running live on someone else's data (e.g. the judges'): [`docs/live-demo-runbook.md`](docs/live-demo-runbook.md).
+Hosting the demo on Render (UI + API in one service): [`docs/deploy-render.md`](docs/deploy-render.md).
 
 (On macOS/Linux use `python3` if `python` is not 3.11+.) **With `make`** (macOS/Linux, or Git Bash on Windows):
 
