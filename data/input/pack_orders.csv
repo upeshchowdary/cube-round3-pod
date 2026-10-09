@@ -1,0 +1,11 @@
+record_id,unit_id,org_id,order_id,channel,order_lines,observed_in_box,operator_verdict,photo_refs,operator_id,captured_at
+PCK-C26RM-001,UNIT-C26RM-001,org_demo_alpha,ORD-C26RM-001,shopify,SKU-C26RM-001:1,SKU-C26RM-001:1,seal,UNIT-C26RM-001/pack/open_box.jpg,op_r2_testset,2026-08-01T09:00:00Z
+PCK-C26RM-002,UNIT-C26RM-002,org_demo_alpha,ORD-C26RM-002,shopify,SKU-C26RM-002:1,SKU-C26RM-002:1,seal,UNIT-C26RM-002/pack/open_box.jpg,op_r2_testset,2026-08-01T09:11:00Z
+PCK-C26RM-012,UNIT-C26RM-012,org_demo_alpha,ORD-C26RM-012,shopify,SKU-C26RM-012:1,SKU-C26RM-012:1,seal,UNIT-C26RM-012/pack/open_box.jpg,op_r2_testset,2026-08-01T11:01:00Z
+PCK-C26RM-015,UNIT-C26RM-015,org_demo_alpha,ORD-C26RM-015,shopify,SKU-C26RM-015:1,SKU-C26RM-015:1,seal,UNIT-C26RM-015/pack/open_box.jpg,op_r2_testset,2026-08-01T11:34:00Z
+PCK-C26RM-022,UNIT-C26RM-022,org_demo_alpha,ORD-C26RM-022,shopify,SKU-C26RM-022:1,SKU-C26RM-022:1,seal,UNIT-C26RM-022/pack/open_box.jpg,op_r2_testset,2026-08-01T12:51:00Z
+PCK-C26RM-031,UNIT-C26RM-031,org_demo_alpha,ORD-C26RM-031,shopify,SKU-C26RM-031:1,SKU-C26RM-031:1,seal,UNIT-C26RM-031/pack/open_box.jpg,op_r2_testset,2026-08-01T14:30:00Z
+PCK-C26RM-041,UNIT-C26RM-041,org_demo_alpha,ORD-C26RM-041,shopify,SKU-C26RM-041:1,SKU-C26RM-041:1,seal,UNIT-C26RM-041/pack/open_box.jpg,op_r2_testset,2026-08-01T16:20:00Z
+PCK-C26RM-044,UNIT-C26RM-044,org_demo_alpha,ORD-C26RM-044,shopify,SKU-C26RM-044:1,SKU-C26RM-044:1,seal,UNIT-C26RM-044/pack/open_box.jpg,op_r2_testset,2026-08-01T16:53:00Z
+PCK-C26RM-032,UNIT-C26RM-032,org_demo_alpha,ORD-C26RM-032,shopify,SKU-C26RM-032:1,SKU-C26RM-032:1,seal,UNIT-C26RM-032/pack/open_box.jpg,op_r2_testset,2026-08-01T14:41:00Z
+PCK-C26RM-011,UNIT-C26RM-011,org_demo_alpha,ORD-C26RM-011,shopify,SKU-C26RM-011:1,SKU-C26RM-011:1,seal,UNIT-C26RM-011/pack/open_box.jpg,op_r2_testset,2026-08-01T10:50:00Z

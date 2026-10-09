@@ -1,0 +1,11 @@
+record_id,unit_id,org_id,order_id,ordered_sku,ordered_asin,identity_match,parts_list,parts_missing,observed_state,amazon_condition,operator_disposition,photo_refs,operator_id,captured_at,category
+RTN-C26RM-001,UNIT-C26RM-001,org_demo_alpha,ORD-C26RM-001,SKU-C26RM-001,B0RM260001,,phone;USB-C cable;SIM ejector,,,,,UNIT-C26RM-001/returns/1.jpg,op_r2_testset,2026-08-31T10:00:00Z,electronics
+RTN-C26RM-002,UNIT-C26RM-002,org_demo_alpha,ORD-C26RM-002,SKU-C26RM-002,B0RM260002,,phone;USB-C cable;SIM ejector,,,,,UNIT-C26RM-002/returns/1.jpg,op_r2_testset,2026-08-31T10:11:00Z,electronics
+RTN-C26RM-012,UNIT-C26RM-012,org_demo_alpha,ORD-C26RM-012,SKU-C26RM-012,B0RM260012,,tablet;S Pen;USB-C cable,,,,,UNIT-C26RM-012/returns/1.jpg,op_r2_testset,2026-08-31T12:01:00Z,electronics
+RTN-C26RM-015,UNIT-C26RM-015,org_demo_alpha,ORD-C26RM-015,SKU-C26RM-015,B0RM260015,,laptop;charger;power cable,,,,,UNIT-C26RM-015/returns/1.jpg,op_r2_testset,2026-08-31T12:34:00Z,electronics
+RTN-C26RM-022,UNIT-C26RM-022,org_demo_alpha,ORD-C26RM-022,SKU-C26RM-022,B0RM260022,,camera body;battery;charger;body cap,,,,,UNIT-C26RM-022/returns/1.jpg,op_r2_testset,2026-08-31T13:51:00Z,electronics
+RTN-C26RM-031,UNIT-C26RM-031,org_demo_alpha,ORD-C26RM-031,SKU-C26RM-031,B0RM260031,,controller;USB cable,,,,,UNIT-C26RM-031/returns/1.jpg,op_r2_testset,2026-08-31T15:30:00Z,electronics
+RTN-C26RM-041,UNIT-C26RM-041,org_demo_alpha,ORD-C26RM-041,SKU-C26RM-041,B0RM260041,,mouse;USB receiver;USB-C cable,,,,,UNIT-C26RM-041/returns/1.jpg,op_r2_testset,2026-08-31T17:20:00Z,electronics
+RTN-C26RM-044,UNIT-C26RM-044,org_demo_alpha,ORD-C26RM-044,SKU-C26RM-044,B0RM260044,,speaker;micro-USB cable,,,,,UNIT-C26RM-044/returns/1.jpg,op_r2_testset,2026-08-31T17:53:00Z,electronics
+RTN-C26RM-032,UNIT-C26RM-032,org_demo_alpha,ORD-C26RM-032,SKU-C26RM-032,B0RM260032,,console;controller;HDMI cable;power cable,,,,,UNIT-C26RM-032/returns/1.jpg,op_r2_testset,2026-08-31T15:41:00Z,electronics
+RTN-C26RM-011,UNIT-C26RM-011,org_demo_alpha,ORD-RET-C26RM-011,SKU-C26RM-011,B0RM260011,,tablet;charging cable;power adapter,,,,,UNIT-C26RM-011/returns/1.jpg,op_r2_testset,2026-08-31T11:50:00Z,electronics

@@ -17,6 +17,10 @@ from functools import lru_cache
 from pathlib import Path
 
 DEFAULT_DIR = Path(__file__).resolve().parents[2] / "data" / "sample"
+# The Pod's own units next to the organisers' sample (data/input/RETURNS_PHOTOS.md): read only with the default dataset,
+# never mixed into a dataset someone hands us. Pack and Returns already read these files for their order lookup.
+POD_DIR = Path(__file__).resolve().parents[2] / "data" / "input"
+POD_FILES = {"pack": "pack_orders.csv", "returns": "returns_orders.csv"}
 FILES = {
     "receiving": "receiving_sample.csv",
     "prep": "prep_sample.csv",
@@ -61,8 +65,8 @@ def describe_missing(kind: str, header: list[str]) -> str:
 
 
 @lru_cache(maxsize=64)
-def _rows(kind: str, directory: str, mtime_ns: int, size: int) -> tuple[dict, ...]:
-    path = Path(directory) / FILES[kind]
+def _rows(kind: str, file: str, mtime_ns: int, size: int) -> tuple[dict, ...]:
+    path = Path(file)
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         header = [h.strip() for h in (reader.fieldnames or [])]
@@ -72,15 +76,25 @@ def _rows(kind: str, directory: str, mtime_ns: int, size: int) -> tuple[dict, ..
         return tuple({(k or "").strip(): v for k, v in r.items()} for r in reader)
 
 
-def rows(kind: str) -> tuple[dict, ...]:
-    """Every row of one file. A file that is not in the dataset has no rows."""
-    path = data_dir() / FILES[kind]
+def _read(kind: str, path: Path) -> tuple[dict, ...]:
     try:
         st = path.stat()
     except FileNotFoundError:
         return ()
     # Keyed on the file's mtime and size too, so an edited CSV is re-read (a running API used to serve the old rows).
-    return _rows(kind, str(data_dir()), st.st_mtime_ns, st.st_size)
+    return _rows(kind, str(path), st.st_mtime_ns, st.st_size)
+
+
+def rows(kind: str) -> tuple[dict, ...]:
+    """Every row of one file. A file that is not in the dataset has no rows.
+
+    With the default dataset, the Pod's own rows for that file (POD_FILES) follow the sample's; a unit already in the
+    sample keeps its sample row."""
+    base = _read(kind, data_dir() / FILES[kind])
+    if kind not in POD_FILES or data_dir().resolve() != DEFAULT_DIR.resolve():
+        return base
+    seen = {(r["unit_id"], r["org_id"]) for r in base}
+    return base + tuple(r for r in _read(kind, POD_DIR / POD_FILES[kind]) if (r["unit_id"], r["org_id"]) not in seen)
 
 
 def present(kind: str) -> bool:

@@ -90,6 +90,39 @@ compliant. 0 claims without a cited record. 42 weight-tier fees, 5 lost-inbound,
 inbound-defect and 1 damaged-in-warehouse lines are SILENT (never claimed); the reasons are in each record.
 **Claim precision is not measured**: there is no independent label of which fees were truly wrong.
 
+## Returns on real product photos (10 more units, added 2026-10-09)
+
+The 100 sample units above have no real images. To show the vision path on real input, 10 units from the Round 2
+Returns test set (`returns_input_50.csv`) were added with **real product photos from Wikimedia Commons**
+(`data/input/RETURNS_PHOTOS.md`: sources, authors, licences). They are catalogue-style photos of the product, not photos
+of an actual shipment or returned item, and the orders are synthetic.
+
+- **Hand-off:** the photo of the product as sold is Pack's open-box capture. Pack checks it, and Returns takes its
+  reference photo from Pack's record (`reference_source: pack`, Pack's record in `upstream_refs`). The returned item's
+  photo is Returns' own capture.
+- **Model:** Returns' answers for 8 units were recorded once from `gemini-3-flash-preview` on these photos (14 requests),
+  and are replayed (`<model> (recorded)`, 0 calls). 2 units have no recording; they fail open (`no_cassette`) until they
+  are resumed with a Gemini key and judged live.
+- **Pack** replays the operator row by default; with a Groq key it looks at the photo itself (`qwen/qwen3.8-27b`, about
+  1-2 s). On these catalogue photos it answers UNCERTAIN: it names the product but sees no SKU label to confirm.
+
+| Unit | What the photos show | Gemini identity | Disposition |
+|---|---|---|---|
+| C26RM-012 Galaxy Tab S9 | a MacBook Pro 16 came back | FAIL | dispose |
+| C26RM-015 Dell XPS 13 2017 | a ThinkPad X1 Carbon came back | FAIL | dispose |
+| C26RM-022 Canon EOS R6 Mark II | a Canon EOS 5D Mark IV came back | FAIL | dispose |
+| C26RM-031 DualSense controller | a **DualSense Edge** came back | FAIL | dispose |
+| C26RM-044 JBL Flip | sold a **Flip 3**, a **Flip 4** came back | FAIL | dispose |
+| C26RM-002 iPhone 15 Pro | an iPhone 15 / 15 Plus display came back | UNCERTAIN | review |
+| C26RM-001 iPhone 15 | same family, different photos | UNCERTAIN | review |
+| C26RM-041 Logitech MX Master 3S | same model | UNCERTAIN | review |
+
+For C26RM-031 and C26RM-044 the Round 2 test set said "same model"; the Wikimedia file names show the photos are of
+different models, so Gemini's FAIL is right and the test set's label was wrong. Gemini passed no swapped item; where it
+could not tell (similar iPhones, a mouse photographed differently) it held the unit for a person. Completeness is
+UNCERTAIN on all 8: a product photo cannot show the cables in the box. **8 units are far too few for an accuracy
+figure**; this shows the path works on real photos, not how accurate it is.
+
 ## Cost and latency
 
 0 model calls and $0 per unit in the default modes. In-process stage latency p50 ≤ 4 ms, max 115 ms (Returns). Live
@@ -109,7 +142,8 @@ modes were not measured: no `GEMINI_API_KEY` was available. One live Pack call t
 
 ## Limits: what this does not tell you
 
-- Any model's accuracy on real photos: no real captures are committed and no live Gemini run was made.
+- Any model's accuracy on real photos: the sample has no real captures, and the 10 real-photo units are catalogue
+  photos, too few to measure accuracy.
 - Generalisation: no held-out set; one synthetic sample.
 - Claim precision: no ground truth for the fee lines.
 - Live latency, cost, rate limits.
@@ -120,4 +154,5 @@ modes were not measured: no `GEMINI_API_KEY` was available. One live Pack call t
 python -m pytest                                                     # 141 passed, 1 skipped
 python -m orchestration.run --all                                    # the 100-unit table above
 python -m orchestration.run --all --cases data/input/my_cases.json   # the Pod's 6 cases
+RETURNS_LIVE_FALLBACK=0 python -m orchestration.run --all --cases data/input/returns_photo_cases.json   # the 10 real-photo units
 ```

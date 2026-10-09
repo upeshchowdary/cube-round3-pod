@@ -13,6 +13,7 @@ endif
 setup:            ## create .venv and install dependencies
 	$(PYTHON) -m venv .venv && $(BIN)/python -m pip install -r requirements.txt
 	@test -f .env || cp .env.example .env
+	$(BIN)/python scripts/fetch_photos.py
 
 test:             ## all tests: contracts, hand-offs, workflow state, UNCERTAIN, failures, overrides, e2e, HTTP, examples
 	$(BIN)/python -m pytest
@@ -23,6 +24,7 @@ e2e:              ## just the end-to-end tests
 run: export LOG_LEVEL = WARNING
 run:              ## run every sample workflow afresh (old state -> out/_previous/); state -> out/workflows, evidence -> out/evidence
 	$(BIN)/python -m orchestration.run --all --fresh
+	@if [ -f data/input/UNIT-C26RM-001/pack/open_box.jpg ]; then RETURNS_LIVE_FALLBACK=0 $(BIN)/python -m orchestration.run --all --cases data/input/returns_photo_cases.json; else echo "real-photo units skipped: run $(BIN)/python scripts/fetch_photos.py"; fi
 
 case:             ## one workflow, full JSON:  make case UNIT=UNIT-0014 ORG=org_demo_alpha
 	@$(BIN)/python -m orchestration.run --unit $(UNIT) --org $(ORG)

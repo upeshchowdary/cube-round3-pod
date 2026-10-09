@@ -71,6 +71,8 @@ def setup(args) -> int:
     if not (ROOT / ".env").exists():
         shutil.copyfile(ROOT / ".env.example", ROOT / ".env")
         say("created .env from .env.example (add API keys there only if you want live model modes)")
+    say("downloading the real product photos (not stored in git; data/photos.json)")
+    sh([str(VPY), "scripts/fetch_photos.py"])
     if args.no_ui:
         return 0
     if not npm():
@@ -108,7 +110,18 @@ def run(args) -> int:
     env = {"LOG_LEVEL": os.environ.get("LOG_LEVEL", "WARNING")}
     # --fresh: workflows left in out/ by older agent code would otherwise be continued and shown as they were.
     rc = sh([str(VPY), "-m", "orchestration.run", "--all", "--fresh"], env=env)
-    return rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/my_cases.json"], env=env)
+    rc = rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/my_cases.json"], env=env)
+    # Real product photos (data/input/RETURNS_PHOTOS.md). The units with no recorded Gemini answer are not judged live
+    # here, so a run never spends quota: Resume them in the UI to judge them live in front of the judges.
+    if rc:
+        return rc
+    if not (ROOT / "data" / "input" / "UNIT-C26RM-001" / "pack" / "open_box.jpg").is_file():
+        sh([str(VPY), "scripts/fetch_photos.py"])  # photos are not in git: get them once
+    if not (ROOT / "data" / "input" / "UNIT-C26RM-001" / "pack" / "open_box.jpg").is_file():
+        say("real-photo units skipped: their photos could not be downloaded (python scripts/fetch_photos.py)")
+        return 0
+    return sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/returns_photo_cases.json"],
+              env={**env, "RETURNS_LIVE_FALLBACK": "0"})
 
 
 def case(args) -> int:
