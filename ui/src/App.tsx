@@ -889,10 +889,11 @@ function Shell() {
           >
             {sidebarCollapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
           </button>
-          <div className="brand-mark">C</div>
+          {/* Collapsed: the leaf mark alone. Expanded: the full wordmark (it already contains the leaf). */}
+          <img className="brand-mark" src="/logo-mark.png" alt="" aria-hidden="true" />
           <div className="brand-copy">
-            <div className="brand-title">CUBE</div>
-            <div className="brand-subtitle">Pod 05</div>
+            <img className="brand-wordmark" src="/logo-sydon.webp" alt="Sydon" />
+            <div className="brand-subtitle">CUBE · Pod 05</div>
           </div>
         </div>
 

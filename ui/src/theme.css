@@ -53,14 +53,14 @@
   gap: 18px;
 }
 .brand-block { padding: 6px 6px 14px; border-bottom: 1px solid var(--line); }
-.brand-mark {
-  background: var(--ink);
-  color: #c9f2d6;
-  font-family: var(--display);
-  font-weight: 800;
-  border-radius: 10px;
+/* Project logo (ui/public/logo-*.{png,webp}): the leaf mark when the sidebar is collapsed, the wordmark when expanded. */
+.brand-mark { display: block; width: 32px; height: 32px; padding: 3px; background: none; border-radius: 0; object-fit: contain; }
+.sidebar:not(.collapsed) .brand-mark { display: none; }
+.brand-wordmark { display: block; height: 26px; width: auto; }
+@media (max-width: 1100px) { /* the sidebar is a 90px rail here: the leaf fits, the wordmark does not */
+  .sidebar:not(.collapsed) .brand-mark { display: block; }
+  .sidebar .brand-copy { display: none; }
 }
-.brand-title { font-family: var(--display); font-weight: 800; letter-spacing: 0.04em; color: var(--ink); }
 .brand-subtitle { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .sidebar-nav { gap: 2px; flex: 1; }
 .nav-item {

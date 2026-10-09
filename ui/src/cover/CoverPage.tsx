@@ -88,14 +88,9 @@ export default function CoverPage() {
   return (
     <div className="cv">
       <header className={`cv-nav ${scrolled ? 'scrolled' : ''}`}>
-        <Link to="/" className="cv-brand" aria-label="CUBE Pod 05 home">
-          <span className="cv-brand-mark" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          cube<span>·pod05</span>
+        <Link to="/" className="cv-brand" aria-label="Sydon · CUBE Pod 05 home">
+          <img className="cv-brand-logo" src="/logo-sydon.webp" alt="Sydon" />
+          <span>·pod05</span>
         </Link>
         <nav className="cv-links" aria-label="Sections">
           <a href="#agents">Agents</a>
@@ -233,8 +228,11 @@ export default function CoverPage() {
           </div>
           <LineFan />
           <div className="cv-footer-mark">
-            cube<span>·pod05</span>
-            <small>Commerce Context · Round 3</small>
+            <span className="cv-footer-logo">
+              <img src="/logo-sydon.webp" alt="Sydon" loading="lazy" />
+              ·pod05
+            </span>
+            <small>CUBE · Commerce Context · Round 3</small>
           </div>
         </div>
         <div className="cv-team">
