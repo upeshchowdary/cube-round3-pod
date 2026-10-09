@@ -414,7 +414,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
                    background: '#fbecea', color: '#8a3a33', border: '1px solid #e2b4ae', fontSize: 13,
                    display: 'flex', justifyContent: 'space-between', gap: 12 }}
         >
-          <span>{apiError ?? 'Orchestrator API unreachable: nothing below is live until it is back (start it with `make serve`).'}</span>
+          <span>{apiError ?? 'Orchestrator API unreachable: nothing below is live until it is back (start it with `python scripts/dev.py serve`, or `make serve`).'}</span>
           {apiError && <button type="button" className="secondary-button small" onClick={() => setApiError(null)}>Dismiss</button>}
         </div>
       )}
