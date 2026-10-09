@@ -55,6 +55,7 @@ import './theme.css'
 import { exampleAgents } from './data'
 // The cover page brings three.js, GSAP and Lenis: load it only when / is opened, not with the control center.
 const CoverPage = React.lazy(() => import('./cover/CoverPage'))
+const LiveRunPage = React.lazy(() => import('./live/LiveRunPage'))
 import { StageEvidence } from './components/StageEvidence'
 import {
   api,
@@ -848,6 +849,7 @@ function EvidenceRecordDrawer({ record, onClose }: { record: EvidenceRecord; onC
 
 const sidebarItems = [
   { to: '/overview', label: 'Overview', icon: Layers3 },
+  { to: '/live', label: 'Live Run', icon: Play },
   { to: '/workflows', label: 'Workflows', icon: Workflow },
   { to: '/units', label: 'Units', icon: Database },
   { to: '/reviews', label: 'Review Queue', icon: FileText },
@@ -996,6 +998,7 @@ function Shell() {
 
           <Routes>
             <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/live" element={<React.Suspense fallback={null}><LiveRunPage /></React.Suspense>} />
             <Route path="/dashboard" element={<OverviewPage />} />
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/:id" element={<WorkflowDetailPage />} />

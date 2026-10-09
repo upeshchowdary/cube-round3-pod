@@ -1,5 +1,5 @@
 {
-  "about": "Real product photos used by the repo but not stored in git. scripts/fetch_photos.py downloads them from Wikimedia Commons and checks each sha256. Credits: data/input/RETURNS_PHOTOS.md.",
+  "about": "Real product photos used by the repo but not stored in git. scripts/fetch_photos.py downloads them from Wikimedia Commons and checks each sha256. Credits: data/input/RETURNS_PHOTOS.md, live_demo_sets/CREDITS.md.",
   "photos": [
     {
       "path": "data/input/UNIT-C26RM-001/pack/open_box.jpg",
@@ -140,6 +140,90 @@
       "width": 1024,
       "quality": 86,
       "sha256": "3b438b0892f2decb1c14a645d49f37c721eaf730bace773a79fc464ae2acc2ab"
+    },
+    {
+      "path": "live_demo_sets/set1_kindle_paperwhite_fba_clean_return/receiving/1_2023_amazon_kindle_paperwhite_1.jpg",
+      "commons_file": "2023 Amazon Kindle Paperwhite (1).jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "f82f9e0077d85fa6f71e3245f4edb6c572de368280eb77f814f4381eb5c8b830"
+    },
+    {
+      "path": "live_demo_sets/set1_kindle_paperwhite_fba_clean_return/returns/1_2023_amazon_kindle_paperwhite_3.jpg",
+      "commons_file": "2023 Amazon Kindle Paperwhite (3).jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "8b6b4238f9eeb2ee3685566c79a820f08b52015ee8d251a4a0f98b4255c22abb"
+    },
+    {
+      "path": "live_demo_sets/set2_switch_oled_zelda_swapped_return/receiving/1_zelda_oled_switch_hof03533_raw_export.jpg",
+      "commons_file": "Zelda-OLED-Switch HOF03533 RAW-Export.png",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "923f571b3763527e5b6c38384e1391731af7fe79bc276ffeab378859ab1268a1"
+    },
+    {
+      "path": "live_demo_sets/set2_switch_oled_zelda_swapped_return/pack/1_nintendo_switch_oled_modell_the_legend_o.jpg",
+      "commons_file": "Nintendo Switch – OLED-Modell (The Legend of Zelda - Tears of the Kingdom) 20230510 HOF02394 RAW-Export.png",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "ad5fbe4ef8c89e26e578d397f178b8789d33addbe1a65b37aaf6769c087327f8"
+    },
+    {
+      "path": "live_demo_sets/set2_switch_oled_zelda_swapped_return/returns/1_nintendo_switch_lite_blue.jpg",
+      "commons_file": "Nintendo switch lite blue.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "e5855839ab52777fc78605f747f12704267c90fc8d59f67c7f9539ebe84241f4"
+    },
+    {
+      "path": "live_demo_sets/set3_switch_lite_grey_damaged_return/pack/1_nintendo_switch_lite_grey_01.jpg",
+      "commons_file": "Nintendo Switch Lite Grey - 01.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "b18a91513f53100520cbe0fc6d422aafbe89e3260277261e36d611d14665a8f4"
+    },
+    {
+      "path": "live_demo_sets/set3_switch_lite_grey_damaged_return/returns/1_keagan_akers_photo_of_mildly_damaged_nin.jpg",
+      "commons_file": "Keagan Akers - Photo of Mildly Damaged Nintendo Switch Lite (Gray).jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "8ae2f9a87d96c3f817f2b495f195d9e7d86f183687ef9540ac2ad791fa15a61c"
+    },
+    {
+      "path": "live_demo_sets/set4_sony_mdr_v6_damaged_delivery/receiving/1_damaged_fragile_parcel_delivered_to_door.jpg",
+      "commons_file": "Damaged fragile parcel delivered to doorstep.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "cf3978c5fda04bb9002373524d129026ffb6985a14a005f073a4c9b083918e86"
+    },
+    {
+      "path": "live_demo_sets/set4_sony_mdr_v6_damaged_delivery/receiving/2_sony_mdr_v6_headphones_boxed.jpg",
+      "commons_file": "Sony MDR-V6 Headphones boxed.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "4a9b9240ad8bec88d26930674c61f6eda77bb98329de8799f01cb3fab4f98fee"
+    },
+    {
+      "path": "live_demo_sets/set4_sony_mdr_v6_damaged_delivery/pack/1_sony_mdr_v6_headphones.jpg",
+      "commons_file": "Sony MDR-V6 headphones.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "78822f70755c7683f2b0913e4913d6af342b7b8b42db964ddde50c942be8aef8"
+    },
+    {
+      "path": "live_demo_sets/set5_dualsense_swapped_for_edge/pack/1_playstation_dualsense_controller.jpg",
+      "commons_file": "Playstation DualSense Controller.png",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "ce847ce8f5dbe107f40f2d57ac3834f859a9b1eee367cfb538e4ea2498bc928d"
+    },
+    {
+      "path": "live_demo_sets/set5_dualsense_swapped_for_edge/returns/1_dualsense_edge_controller.jpg",
+      "commons_file": "DualSense Edge Controller.jpg",
+      "width": 1600,
+      "quality": 88,
+      "sha256": "24a8088064dea8b17892a608e4c825947211d6e18b2c99b7e80bc194a4d55f7e"
     }
   ]
 }

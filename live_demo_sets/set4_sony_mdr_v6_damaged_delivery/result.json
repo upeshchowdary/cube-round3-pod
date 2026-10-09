@@ -1,0 +1,156 @@
+{
+  "run_id": "LIVE-021654-DDC8",
+  "state": "done",
+  "total_seconds": 24,
+  "notes": [],
+  "status": "BLOCKED",
+  "final": {
+    "outcome": "EXCEPTION",
+    "verdict": "FAIL",
+    "reason": "Failed verdict from: receiving; no claim recommended. Flagged for review: pack.",
+    "claimable_usd": null,
+    "needs_human": true
+  },
+  "stages": [
+    {
+      "stage": "receiving",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "FAIL",
+      "outcome": "accept_with_exceptions",
+      "seconds": 21.4,
+      "model": "gemini-3.8-flash",
+      "calls": 1,
+      "reason": "Shipment inspected with 3 exception(s) detected against PO specifications.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "FAIL",
+          "detail": "Observed SKU does not match expected PO specification."
+        },
+        {
+          "check": "carton_count",
+          "verdict": "PASS",
+          "detail": "Carton count (1) matches PO expected (1)."
+        },
+        {
+          "check": "quantity",
+          "verdict": "PASS",
+          "detail": "Unit quantity (1) matches PO expected (1)."
+        },
+        {
+          "check": "carton_damage",
+          "verdict": "FAIL",
+          "detail": "Visible carton damage: crushing."
+        },
+        {
+          "check": "unit_damage",
+          "verdict": "PASS",
+          "detail": "No unit damage observed."
+        },
+        {
+          "check": "quality_flags",
+          "verdict": "FAIL",
+          "detail": "Quality exceptions identified: damaged_carton."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "prep",
+      "state": "skipped",
+      "skipped_reason": "route='mfn' not in ['fba']",
+      "verdict": null,
+      "outcome": null,
+      "seconds": 0.0,
+      "model": null,
+      "calls": null,
+      "reason": null,
+      "checks": [],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "pack",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "pending_review",
+      "seconds": 1.6,
+      "model": "qwen/qwen3.8-27b",
+      "calls": 1,
+      "reason": "No legible SKUs, barcodes, or packaging labels are visible to confirm the items match SKU-SONY-MDRV6. The fragmented, overlapping collage layout prevents a definitive count of the total inventory in the box.",
+      "checks": [
+        {
+          "check": "items_present",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: No legible SKUs, barcodes, or packaging labels are visible to confirm the items match SKU-SONY-MDRV6. The fragmented, overlapping collage layout prevents a definitive count of the total inventory in the box."
+        },
+        {
+          "check": "quantities_correct",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: No legible SKUs, barcodes, or packaging labels are visible to confirm the items match SKU-SONY-MDRV6. The fragmented, overlapping collage layout prevents a definitive count of the total inventory in the box."
+        },
+        {
+          "check": "no_extra_items",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: No legible SKUs, barcodes, or packaging labels are visible to confirm the items match SKU-SONY-MDRV6. The fragmented, overlapping collage layout prevents a definitive count of the total inventory in the box."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "returns",
+      "state": "skipped",
+      "skipped_reason": "returned=False not in [True]",
+      "verdict": null,
+      "outcome": null,
+      "seconds": 0.0,
+      "model": null,
+      "calls": null,
+      "reason": null,
+      "checks": [],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "recovery",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "PASS",
+      "outcome": "no_claim",
+      "seconds": 0.0,
+      "model": "rules",
+      "calls": 0,
+      "reason": "1 charge(s) audited by rules: 0 contradicted, 0 silent",
+      "checks": [
+        {
+          "check": "charge_fee_live_021654_ddc8_1",
+          "verdict": "PASS",
+          "detail": "Receiving evidence RCV-LIVE-021654-DDC8 confirms a defect"
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": [
+        {
+          "charge": "inbound_defect_fee",
+          "amount": 2.5,
+          "position": "SUPPORTS",
+          "why": "Receiving evidence RCV-LIVE-021654-DDC8 confirms a defect"
+        }
+      ]
+    }
+  ]
+}

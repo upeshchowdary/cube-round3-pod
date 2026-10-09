@@ -1,0 +1,172 @@
+{
+  "run_id": "LIVE-021719-D9FE",
+  "state": "done",
+  "total_seconds": 60,
+  "notes": [],
+  "status": "BLOCKED",
+  "final": {
+    "outcome": "CLAIM_RECOMMENDED",
+    "verdict": "FAIL",
+    "reason": "Recovery contradicted at least one charge (claimable $3.00). Flagged for review: pack, returns.",
+    "claimable_usd": 3.0,
+    "needs_human": true
+  },
+  "stages": [
+    {
+      "stage": "receiving",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "PASS",
+      "outcome": "accept",
+      "seconds": 0.0,
+      "model": "csv-replay",
+      "calls": 0,
+      "reason": "Shipment fully complies with PO specifications and receiving condition standards.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "PASS",
+          "detail": "Observed SKU matches expected PO specification."
+        },
+        {
+          "check": "carton_count",
+          "verdict": "PASS",
+          "detail": "Carton count (1) matches PO expected (1)."
+        },
+        {
+          "check": "quantity",
+          "verdict": "PASS",
+          "detail": "Unit quantity (12) matches PO expected (12)."
+        },
+        {
+          "check": "carton_damage",
+          "verdict": "PASS",
+          "detail": "No carton damage observed."
+        },
+        {
+          "check": "unit_damage",
+          "verdict": "PASS",
+          "detail": "No unit damage observed."
+        },
+        {
+          "check": "quality_flags",
+          "verdict": "PASS",
+          "detail": "No quality exceptions flagged."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "prep",
+      "state": "skipped",
+      "skipped_reason": "route='mfn' not in ['fba']",
+      "verdict": null,
+      "outcome": null,
+      "seconds": 0.0,
+      "model": null,
+      "calls": null,
+      "reason": null,
+      "checks": [],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "pack",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "UNCERTAIN",
+      "outcome": "pending_review",
+      "seconds": 1.0,
+      "model": "qwen/qwen3.8-27b",
+      "calls": 1,
+      "reason": "A single unit consistent with the expected DualSense White SKU was clearly identified in the image.",
+      "checks": [
+        {
+          "check": "items_present",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: A single unit consistent with the expected DualSense White SKU was clearly identified in the image."
+        },
+        {
+          "check": "quantities_correct",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: A single unit consistent with the expected DualSense White SKU was clearly identified in the image."
+        },
+        {
+          "check": "no_extra_items",
+          "verdict": "UNCERTAIN",
+          "detail": "uncertain: A single unit consistent with the expected DualSense White SKU was clearly identified in the image."
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": null
+    },
+    {
+      "stage": "returns",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "FAIL",
+      "outcome": "pending_review",
+      "seconds": 55.6,
+      "model": "gemini-3.8-flash",
+      "calls": 2,
+      "reason": "R03: Wrong item returned (visual identity discrepancy: returned unit model does not match sold SKU). Auto-disapproved. Rules engine route: dispose, human sign-off required. review: nonessential_component_uncertain, listing_blockers_undetermined. sign-off: S01_dispose_always. Evaluated from single photograph; single-angle view verified. Confidence calibrated accordingly.",
+      "checks": [
+        {
+          "check": "identity_match",
+          "verdict": "FAIL",
+          "detail": "Not the ordered item SKU-DUALSENSE-WHT (P1)."
+        },
+        {
+          "check": "completeness",
+          "verdict": "UNCERTAIN",
+          "detail": "Not visible in the provided photos: USB cable."
+        },
+        {
+          "check": "condition",
+          "verdict": "PASS",
+          "detail": "Used - Like New. Rubric: \"an apparently untouched item in perfect condition.\" Functional test not performed."
+        }
+      ],
+      "error": null,
+      "reference_source": "pack",
+      "disposition": "dispose",
+      "charges": null
+    },
+    {
+      "stage": "recovery",
+      "state": "completed",
+      "skipped_reason": null,
+      "verdict": "FAIL",
+      "outcome": "claim_recommended",
+      "seconds": 0.0,
+      "model": "rules",
+      "calls": 0,
+      "reason": "1 charge(s) audited by rules: 1 contradicted, 0 silent",
+      "checks": [
+        {
+          "check": "charge_fee_live_021719_d9fe_1",
+          "verdict": "FAIL",
+          "detail": "Receiving evidence RCV-LIVE-021719-D9FE shows the unit compliant"
+        }
+      ],
+      "error": null,
+      "reference_source": null,
+      "disposition": null,
+      "charges": [
+        {
+          "charge": "inbound_defect_fee",
+          "amount": 3.0,
+          "position": "CONTRADICTS",
+          "why": "Receiving evidence RCV-LIVE-021719-D9FE shows the unit compliant"
+        }
+      ]
+    }
+  ]
+}

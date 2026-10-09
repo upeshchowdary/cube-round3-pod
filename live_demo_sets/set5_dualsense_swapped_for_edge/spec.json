@@ -1,0 +1,52 @@
+{
+  "product": {
+    "title": "PlayStation 5 DualSense Wireless Controller",
+    "sku": "SKU-DUALSENSE-WHT",
+    "asin": "B08H99BPJN",
+    "category": "electronics",
+    "colour": "white",
+    "variant": "standard",
+    "components": [
+      "controller",
+      "USB cable"
+    ]
+  },
+  "route": "mfn",
+  "returned": true,
+  "receiving": {
+    "supplier": "Sony Interactive (distributor)",
+    "po_number": "PO-LIVE-1001",
+    "cartons_ordered": 1,
+    "cartons_received": 1,
+    "units_per_carton_ordered": 12,
+    "units_per_carton_counted": 12,
+    "qty_ordered": 12,
+    "qty_received": 12,
+    "identity_match": "yes",
+    "carton_damage": "none",
+    "unit_damage": "none",
+    "quality_flags": []
+  },
+  "pack": {
+    "channel": "shopify",
+    "order_lines": [
+      {
+        "sku": "SKU-DUALSENSE-WHT",
+        "qty": 1
+      }
+    ],
+    "operator_verdict": "seal"
+  },
+  "returns": {
+    "parts_list": [
+      "controller",
+      "USB cable"
+    ]
+  },
+  "fees": [
+    {
+      "charge_type": "inbound_defect_fee",
+      "amount_usd": 3.0
+    }
+  ]
+}

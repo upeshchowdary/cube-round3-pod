@@ -21,10 +21,12 @@ import json
 from shared.utils import sample_data
 
 from .clients import HttpClient, client_for, load_manifest
+from .live_demo import router as live_router
 from .orchestrator import ROOT, apply_override, bundle, default_flow_path, flow_stages, load_flow, resume, run_workflow
 from .store import EvidenceConflict, FileStore
 
 app = FastAPI(title="CUBE Round 3 orchestrator")
+app.include_router(live_router)  # /live/...: the UI's Live Run page (orchestration/live_demo.py)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

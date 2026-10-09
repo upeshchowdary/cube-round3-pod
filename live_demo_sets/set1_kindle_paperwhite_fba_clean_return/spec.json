@@ -1,0 +1,60 @@
+{
+  "product": {
+    "title": "Amazon Kindle Paperwhite (11th generation, 2023)",
+    "sku": "SKU-KINDLE-PW11",
+    "asin": "B0DEMOKPW1",
+    "category": "electronics",
+    "colour": "black",
+    "variant": "16GB, with grey cover",
+    "components": [
+      "e-reader",
+      "cover"
+    ]
+  },
+  "route": "fba",
+  "returned": true,
+  "receiving": {
+    "supplier": "Amazon Devices distributor",
+    "po_number": "PO-DEMO-1001",
+    "cartons_ordered": 1,
+    "cartons_received": 1,
+    "units_per_carton_ordered": 1,
+    "units_per_carton_counted": 1,
+    "qty_ordered": 1,
+    "qty_received": 1,
+    "identity_match": "yes",
+    "carton_damage": "none",
+    "unit_damage": "none",
+    "quality_flags": []
+  },
+  "prep": {
+    "fnsku": "X00DEMO001",
+    "prep_price_usd": 0.4,
+    "wo_polybag": true,
+    "wo_suffocation_warning": true,
+    "wo_expiry_date": false,
+    "wo_handling_marks": [],
+    "polybag_present_sealed": "yes",
+    "suffocation_warning": "legible",
+    "fnsku_label_placement": "flat",
+    "original_barcode_covered": "yes",
+    "expiry_date": "not_required",
+    "handling_marks": "not_required"
+  },
+  "returns": {
+    "parts_list": [
+      "e-reader",
+      "cover"
+    ]
+  },
+  "fees": [
+    {
+      "charge_type": "refund_issued_item_not_returned",
+      "amount_usd": 139.99
+    },
+    {
+      "charge_type": "fulfilment_fee_weight_tier",
+      "amount_usd": 3.22
+    }
+  ]
+}
