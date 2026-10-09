@@ -1,0 +1,145 @@
+{
+  "about": "Real product photos used by the repo but not stored in git. scripts/fetch_photos.py downloads them from Wikimedia Commons and checks each sha256. Credits: data/input/RETURNS_PHOTOS.md.",
+  "photos": [
+    {
+      "path": "data/input/UNIT-C26RM-001/pack/open_box.jpg",
+      "commons_file": "Apple iPhone 15.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "6937b854926faa9f65e2abdbf79f488ea950e443fd3761f6d2906ac14e8acea5"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-001/returns/1.jpg",
+      "commons_file": "Apple iPhone 15.jpeg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "7c540ef17af226cc41cab56a66d53b19fa88c446af55540948a75ec61cd34cbd"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-002/pack/open_box.jpg",
+      "commons_file": "Apple iPhone 15 Pro.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "dab2df7dc27177189bda86d4c3ce4803a6befaaf69b9a9ec5755960a97d9b904"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-002/returns/1.jpg",
+      "commons_file": "IPhone 15 and 15 Plus in Apple Store - 2.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "48eb06688ea5bdae5cbcf543e60a8a5b1b2ae34762b020aee01ccb6fb61ee4ce"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-012/pack/open_box.jpg",
+      "commons_file": "20230729 삼성 갤럭시 탭 S9.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "7438fddea12484e154b352651b7c2f58f6741a5e874c76b1bde3334800f066d0"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-012/returns/1.jpg",
+      "commons_file": "Apple MacBook Pro 16\" M2 Max closeup.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "b60c60e59ec2b35449d05cb6ba85a43b724c7c122b02ee66e96c71b5557cdd69"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-015/pack/open_box.jpg",
+      "commons_file": "DELL XPS 13 and 15 (37080596413).jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "7e4e17ac26e370a174819c0637cf0ff8c88209d32e13a051684784cd4e2105f0"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-015/returns/1.jpg",
+      "commons_file": "Lenovo ThinkPad X1 Carbon Ultrabook.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "f573f00661e443aa4919dec6153787caf6380d5c059efb2ac388fea6e0cc7acc"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-022/pack/open_box.jpg",
+      "commons_file": "Canon EOS R6 Mark II - by Henry Söderlund (52546794891).jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "0018943e385f7d11a1c728ea0a60a1541ae2ddcd26faf952402c0bf405585582"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-022/returns/1.jpg",
+      "commons_file": "Canon EOS 5D Mark IV (Front), 1803241116, ako.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "1804a001e62a233bb17ca005f10502e3c589963f607b8aa6aa6327ef31c9d5f5"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-031/pack/open_box.jpg",
+      "commons_file": "Playstation DualSense Controller.png",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "bd9d894c78627887165ebca1a4267a341aed4e8b24e97cb57de2281b101925e7"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-031/returns/1.jpg",
+      "commons_file": "DualSense Edge Controller.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "6c234742a082f08fe3e0225a15d55e49b881ac6f917188d14ad4e25b9c9c45c1"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-041/pack/open_box.jpg",
+      "commons_file": "Logitech MX Master 3S HS12.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "216037c47aa457be4511e1aa2035d4b1a85f2ac5396bbe45070ca824473f2878"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-041/returns/1.jpg",
+      "commons_file": "Logitech MX Master 3S HS13.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "edb81d49b77c36c3d5256531125d3b3b7b3a09b273d1c817345896c7bf6f29d1"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-044/pack/open_box.jpg",
+      "commons_file": "JBL Flip 3 bluetooth speaker (DSCF2653).jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "f14e6fe9889267b0ab8b9abf1af9fc1a8ab951559ec259aa0ca3e45e4b8dbaaf"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-044/returns/1.jpg",
+      "commons_file": "JBL Flip 4.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "2cb94699b4c45fcffe9c092ad447432e7af74d510ca72e5492589358d923db09"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-032/pack/open_box.jpg",
+      "commons_file": "Sony-PlayStation-3-2001A-wController-L.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "32a8695983adad99f195c1335192b60994ffe66facfd97ff34b9ec896794c134"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-032/returns/1.jpg",
+      "commons_file": "PS4-Console-wDS4.jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "968e565c0f61fda0c8ec436db43df1ef995fc91742f3acb2f5654c7931d946e7"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-011/pack/open_box.jpg",
+      "commons_file": "Apple iPad Air 2 vs iPad Air (15462494089).jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "c75b932cf93f7fe1c332d37cfd9a6e7c1cf27e77861464bfb22bf5eae519e3c9"
+    },
+    {
+      "path": "data/input/UNIT-C26RM-011/returns/1.jpg",
+      "commons_file": "Apple iPad Air 2 vs iPad Air (15625427526).jpg",
+      "width": 1024,
+      "quality": 86,
+      "sha256": "3b438b0892f2decb1c14a645d49f37c721eaf730bace773a79fc464ae2acc2ab"
+    }
+  ]
+}

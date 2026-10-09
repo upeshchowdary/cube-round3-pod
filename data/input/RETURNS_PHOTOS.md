@@ -11,7 +11,7 @@ orders and scenarios are synthetic test cases with no customer data.
 - 8 units carry a Gemini answer recorded from a real model run on these photos (`agents/returns/cassettes/`); 2 have none
   and are judged live when a Gemini key is set.
 
-Images were downloaded on 2026-10-09 and resized to at most 1024 px.
+Images were downloaded on 2026-10-09 and resized to at most 1024 px. **They are not stored in git:** `python scripts/fetch_photos.py` downloads them (it runs in `dev.py setup`, `make setup` and the Docker build) and checks each against the sha256 in `data/photos.json`, because the recorded Gemini answers only replay on the exact same bytes.
 
 ## Units and Gemini's recorded answers
 

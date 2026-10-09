@@ -18,12 +18,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY --from=ui /ui/dist ui/dist
+# The real product photos are not in git: download them (data/photos.json; each one checked against its sha256).
+RUN python scripts/fetch_photos.py
 
 # Run every case once at build time (replay mode, no keys needed), so the dashboard has data the moment the service
 # starts. Overrides and new runs made on the site are kept until the next deploy or restart (Render's disk is not kept).
 RUN python -m orchestration.run --all --fresh \
  && python -m orchestration.run --all --cases data/input/my_cases.json \
- && RETURNS_LIVE_FALLBACK=0 python -m orchestration.run --all --cases data/input/returns_photo_cases.json
+ && if [ -f data/input/UNIT-C26RM-001/pack/open_box.jpg ]; then \
+      RETURNS_LIVE_FALLBACK=0 python -m orchestration.run --all --cases data/input/returns_photo_cases.json; fi
 
 EXPOSE 8100
 CMD ["sh", "-c", "exec uvicorn orchestration.web:app --host 0.0.0.0 --port ${PORT:-8100}"]

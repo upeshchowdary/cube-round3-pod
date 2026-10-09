@@ -21,6 +21,21 @@ CASES = json.loads((ROOT / "data" / "input" / "returns_photo_cases.json").read_t
 CASSETTES = ROOT / "agents" / "returns" / "cassettes"
 RECORDED = [c for c in CASES if (CASSETTES / c["org_id"] / f"{c['unit_id']}.jsonl").is_file()]
 LIVE_ONLY = [c for c in CASES if c not in RECORDED]
+PHOTOS = json.loads((ROOT / "data" / "photos.json").read_text(encoding="utf-8"))["photos"]
+# The photos are not in git (scripts/fetch_photos.py downloads them); without them these units cannot run.
+needs_photos = pytest.mark.skipif(
+    not all((ROOT / p["path"]).is_file() for p in PHOTOS if p["path"].startswith("data/input/")),
+    reason="real product photos not downloaded: python scripts/fetch_photos.py")
+
+
+def test_every_unit_photo_is_listed_for_download_and_kept_out_of_git():
+    listed = {p["path"] for p in PHOTOS}
+    for c in CASES:
+        for rel in (f"data/input/{c['unit_id']}/pack/open_box.jpg", f"data/input/{c['unit_id']}/returns/1.jpg"):
+            assert rel in listed, rel
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "data/input/UNIT-C26RM-*/**/*.jpg" in gitignore
+    assert all(len(p["sha256"]) == 64 and p["commons_file"] for p in PHOTOS)
 
 
 @pytest.fixture(autouse=True)
@@ -56,6 +71,7 @@ def test_pod_rows_join_only_the_default_dataset(monkeypatch, tmp_path):
     assert not sample_data.has("pack", unit, "org_demo_alpha")
 
 
+@needs_photos
 @pytest.mark.parametrize("case", RECORDED, ids=lambda c: c["unit_id"])
 def test_recorded_unit_replays_with_the_reference_photo_from_pack(case):
     wf, stages, store = _run(case)
@@ -74,6 +90,7 @@ def test_recorded_unit_replays_with_the_reference_photo_from_pack(case):
     assert ret["payload"]["model_mode"] == "replay" and "cassette_provenance" not in ret["payload"]
 
 
+@needs_photos
 def test_gemini_catches_the_model_swaps():
     """Recorded answers on swapped products: a different model came back, and Gemini says identity FAIL. Two of these
     (DualSense -> DualSense Edge, JBL Flip 3 -> Flip 4) were labelled 'same model' in the Round 2 test set."""
@@ -85,6 +102,7 @@ def test_gemini_catches_the_model_swaps():
         assert stages["returns"]["verdict"] == "FAIL"
 
 
+@needs_photos
 @pytest.mark.parametrize("case", LIVE_ONLY, ids=lambda c: c["unit_id"])
 def test_unit_without_a_recording_fails_open_until_it_is_judged_live(case):
     wf, stages, _ = _run(case)

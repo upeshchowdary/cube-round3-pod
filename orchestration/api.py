@@ -42,16 +42,19 @@ def list_cases() -> list[dict]:
     the dataset's cases.json.
 
     With DATA_DIR pointing at a loaded dataset (scripts/dev.py dataset), only that dataset's cases are listed: the Pod's
-    demo units are not in it.
+    demo units are not in it. A real-photo unit is listed only once its photos are there (scripts/fetch_photos.py).
     """
     out, seen = [], set()
     paths = [sample_data.data_dir() / "cases.json"]
+    photo_cases = ROOT / "data" / "input" / "returns_photo_cases.json"
     if sample_data.data_dir().resolve() == sample_data.DEFAULT_DIR.resolve():
-        paths[:0] = [ROOT / "data" / "input" / "my_cases.json", ROOT / "data" / "input" / "returns_photo_cases.json"]
+        paths[:0] = [ROOT / "data" / "input" / "my_cases.json", photo_cases]
     for path in paths:
         if path.exists():
             for case in json.loads(path.read_text()):
                 key = (case["org_id"], case["unit_id"])
+                if path == photo_cases and not any((ROOT / "data" / "input" / case["unit_id"]).rglob("*.jpg")):
+                    continue
                 if key not in seen:
                     seen.add(key)
                     out.append({**case, "source": "pod" if path.parent.name == "input" else "sample"})
