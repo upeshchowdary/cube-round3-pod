@@ -481,6 +481,11 @@
 }
 .graph-node { background: #fff; border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); font-size: 11px; }
 .graph-node strong { font-family: var(--mono); font-size: 11.5px; }
+/* Evidence graph: nodes sit 215px apart, so cap them and ellipsise long record ids (the full id is in the tooltip). */
+.graph-node.clickable-node { max-width: 200px; }
+.graph-node.clickable-node strong { display: block; overflow: hidden; text-overflow: ellipsis; }
+.evidence-graph-panel { overflow-x: auto; overflow-y: hidden; }
+.evidence-graph-canvas { position: relative; min-height: 420px; }
 .clickable-node:hover { border-color: var(--mint); }
 
 .modal-overlay, .evidence-drawer-overlay {
