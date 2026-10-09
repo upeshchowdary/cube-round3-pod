@@ -495,6 +495,11 @@
   font-family: var(--body);
   color: var(--ink);
 }
+/* The drawer is ~490px wide: let its checks table wrap instead of pushing Observed/Cites off-screen. */
+.evidence-drawer .table-card th, .evidence-drawer .table-card td { white-space: normal; padding: 10px 8px; }
+.evidence-drawer .table-card th { letter-spacing: 0.06em; }
+.evidence-drawer .table-card td small { min-width: 0; max-width: none; overflow-wrap: anywhere; }
+.evidence-drawer .table-card td:nth-child(2) { white-space: nowrap; }
 .modal-box { border-radius: 18px; animation: ledger-rise 0.25s ease both; }
 .modal-title { font-family: var(--display); font-weight: 700; color: var(--ink); }
 .json-viewer { font-size: 11.5px; background: var(--ink); color: #d6efe0; border-radius: 10px; }
