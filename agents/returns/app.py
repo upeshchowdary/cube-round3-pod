@@ -12,7 +12,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -179,7 +178,7 @@ def handle(request: dict) -> dict:
             settings,
             CASSETTES_DIR,
         )
-    except FileNotFoundError as exc:
+    except FileNotFoundError:
         return pending_output(
             request,
             code="no_cassette",
