@@ -86,20 +86,23 @@ def _read_prompt_version() -> str:
     return "1.5.0"
 
 
-def _round2_settings(mode: str = "replay") -> Settings:
+def _round2_settings(mode: str = "replay", recorded_model: str | None = None) -> Settings:
     """Round 2 Settings, with the Pod's LOG_LEVEL convention mapped onto Round 2's.
 
     The Pod documents LOG_LEVEL as DEBUG | INFO | WARNING (`.env.example`, `make run` sets WARNING); Round 2 accepts only
     lower-case debug | info | warning | error and raised a ValidationError on the Pod's values, which crashed this agent.
 
-    RETURNS_LIVE_MODEL picks the Gemini model for live/record mode only. Replay keeps the model the cassette was recorded
-    with (setting RM_JUDGMENT_MODEL globally made every replay fail with schema_error).
+    RETURNS_LIVE_MODEL picks the Gemini model for live/record mode only. Replay uses the model the cassette was recorded
+    with (`recorded_model`): the model name is part of every request, so replaying a gemini-3-flash-preview recording
+    with the default model built different requests and every replay failed with schema_error.
     """
     level = os.environ.get("LOG_LEVEL", "info").strip().lower()
     overrides = {}
     live_model = os.environ.get("RETURNS_LIVE_MODEL")
     if mode != "replay" and live_model:
         overrides = {"rm_judgment_model": live_model, "rm_escalation_model": live_model}
+    elif mode == "replay" and recorded_model:
+        overrides = {"rm_judgment_model": recorded_model, "rm_escalation_model": recorded_model}
     return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info", **overrides)
 
 
@@ -113,6 +116,17 @@ def _model_mode(org_id: str, subject_id: str) -> str:
         logger.info("no cassette for %s in %s: judging it live", subject_id, org_id)
         return "live"
     return mode
+
+
+def _recorded_model(org_id: str, subject_id: str) -> str | None:
+    """The model named on the cassette's first request, or None (no cassette, or an unreadable first line)."""
+    path = CASSETTES_DIR / org_id / f"{subject_id}.jsonl"
+    try:
+        with path.open(encoding="utf-8") as fh:
+            first = next((ln for ln in fh if ln.strip()), "")
+        return json.loads(first).get("model") if first else None
+    except (OSError, ValueError):
+        return None
 
 
 ROUND2_COMMIT = _read_round2_commit()
@@ -165,7 +179,7 @@ def handle(request: dict) -> dict:
     # 4. Model client and mode configuration (§4.4)
     mode = _model_mode(org_id, subject_id)
     try:
-        settings = _round2_settings(mode)
+        settings = _round2_settings(mode, _recorded_model(org_id, subject_id) if mode == "replay" else None)
     except Exception as exc:  # a configuration problem is recorded, never a crash of the agent
         return pending_output(request, code="model_not_configured", message=f"Round 2 settings invalid: {exc}"[:500],
                               retryable=False, agent_id=AGENT_ID)
