@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 
@@ -110,7 +111,16 @@ class FileStore(MemoryStore):
         p = self._safe_path("workflows", wf["workflow_id"])
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(wf, indent=2))
-        tmp.replace(p)  # atomic: a crash never leaves half a workflow
+        # atomic: a crash never leaves half a workflow. On Windows the replace is refused (WinError 5) while another
+        # process (antivirus, search indexer) briefly holds the file it just saw written, so retry for up to ~2 s.
+        for attempt in range(20):
+            try:
+                tmp.replace(p)
+                return
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.1)
 
     def _all_workflows(self) -> list[dict]:
         return [json.loads(p.read_text()) for p in sorted((self.root / "workflows").glob("*.json"))]
