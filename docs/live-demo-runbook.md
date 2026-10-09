@@ -82,6 +82,18 @@ Photo files named in a row's `photo_refs` column are picked up too when they sit
 
 Then: override a blocked unit (Intervene / Override, name and reason), Resume, show Recovery re-run on the new verdict.
 
+### Real photos and a live Gemini run (Pack -> Returns)
+
+The units `UNIT-C26RM-*` carry real product photos (`data/input/RETURNS_PHOTOS.md`). Open **UNIT-C26RM-031**: Pack
+checked the photo of the controller as sold and handed it to Returns, which compared it with the returned one and found
+a DualSense **Edge** instead of a DualSense (identity FAIL, Gemini's recorded answer). Open the Pack and Returns records
+to show the photo travelling from one to the other (`reference_source: pack`).
+
+For a live run, open **UNIT-C26RM-032** or **UNIT-C26RM-011** (FAILED, `no_cassette`: no recorded answer) and press
+**Resume**. With `GEMINI_API_KEY` set (Render: the service's Environment; laptop: `.env`), Returns now asks Gemini
+live, in about 10-30 s, and the record names the model and the number of calls. Each run costs about 1-4 of the
+roughly 20 free requests a day, so do not rehearse it on the day.
+
 ## Column lists (required; other columns are optional)
 
 | File | Required columns |
