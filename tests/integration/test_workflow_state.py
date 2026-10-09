@@ -243,6 +243,15 @@ def test_override_needs_actor_reason_and_real_evidence():
         apply_override(wf["workflow_id"], store, record_id="RCV-NOPE", new_verdict="PASS", actor="a", reason="x")
 
 
+@pytest.mark.parametrize("verdict", ["MAYBE", "pass", "", None])
+def test_override_refuses_a_verdict_outside_pass_fail_uncertain(verdict):
+    wf, store = run()
+    rid = wf["evidence_references"][0]
+    with pytest.raises(ValueError):
+        apply_override(wf["workflow_id"], store, record_id=rid, new_verdict=verdict, actor="a", reason="x")
+    assert store.load_workflow(wf["workflow_id"])["overrides"] == []  # nothing was stored
+
+
 # ------------------------------------------------------------ evidence is immutable and the chain is traceable
 def test_evidence_cannot_be_replaced():
     wf, store = run()
