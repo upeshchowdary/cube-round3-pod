@@ -23,6 +23,10 @@ class TenantConflict(EvidenceConflict):
     """A write would place one org's data under an id that already belongs to another org."""
 
 
+class InvalidId(EvidenceConflict):
+    """An id that is not a plain file name (e.g. '../x'): refused, so it can never address a file outside the store."""
+
+
 def _org_of_record(record: dict) -> str | None:
     return (record.get("subject") or {}).get("org_id")
 
@@ -85,12 +89,25 @@ class FileStore(MemoryStore):
         (self.root / "workflows").mkdir(parents=True, exist_ok=True)
         (self.root / "evidence").mkdir(parents=True, exist_ok=True)
 
+    def _path(self, kind: str, ident: str) -> Path | None:
+        """The file for one id, or None when the id is not a plain file name. Ids come from URLs: '..\\..\\pod' must not
+        read pod.json (or any other .json on the disk) as if it were a workflow."""
+        if not isinstance(ident, str) or not ident or any(c in ident for c in "/\\\0:") or ident.startswith("."):
+            return None
+        return self.root / kind / f"{ident}.json"
+
+    def _safe_path(self, kind: str, ident: str) -> Path:
+        p = self._path(kind, ident)
+        if p is None:
+            raise InvalidId(f"{ident!r} is not a valid {kind} id (no path separators, ':' or leading '.')")
+        return p
+
     def _read_workflow(self, workflow_id: str) -> dict | None:
-        p = self.root / "workflows" / f"{workflow_id}.json"
-        return json.loads(p.read_text()) if p.exists() else None
+        p = self._path("workflows", workflow_id)
+        return json.loads(p.read_text()) if p and p.exists() else None
 
     def _write_workflow(self, wf: dict) -> None:
-        p = self.root / "workflows" / f"{wf['workflow_id']}.json"
+        p = self._safe_path("workflows", wf["workflow_id"])
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(wf, indent=2))
         tmp.replace(p)  # atomic: a crash never leaves half a workflow
@@ -99,8 +116,8 @@ class FileStore(MemoryStore):
         return [json.loads(p.read_text()) for p in sorted((self.root / "workflows").glob("*.json"))]
 
     def _read_evidence(self, record_id: str) -> dict | None:
-        p = self.root / "evidence" / f"{record_id}.json"
-        return json.loads(p.read_text()) if p.exists() else None
+        p = self._path("evidence", record_id)
+        return json.loads(p.read_text()) if p and p.exists() else None
 
     def _write_evidence(self, record: dict) -> None:
-        (self.root / "evidence" / f"{record['record_id']}.json").write_text(json.dumps(record, indent=2))
+        self._safe_path("evidence", record["record_id"]).write_text(json.dumps(record, indent=2))
