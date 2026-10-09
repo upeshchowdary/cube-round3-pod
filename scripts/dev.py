@@ -108,7 +108,11 @@ def run(args) -> int:
     env = {"LOG_LEVEL": os.environ.get("LOG_LEVEL", "WARNING")}
     # --fresh: workflows left in out/ by older agent code would otherwise be continued and shown as they were.
     rc = sh([str(VPY), "-m", "orchestration.run", "--all", "--fresh"], env=env)
-    return rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/my_cases.json"], env=env)
+    rc = rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/my_cases.json"], env=env)
+    # Real product photos (data/input/RETURNS_PHOTOS.md). The units with no recorded Gemini answer are not judged live
+    # here, so a run never spends quota: Resume them in the UI to judge them live in front of the judges.
+    return rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/returns_photo_cases.json"],
+                    env={**env, "RETURNS_LIVE_FALLBACK": "0"})
 
 
 def case(args) -> int:
