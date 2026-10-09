@@ -8,6 +8,10 @@ its sha256. The Gemini answers recorded for the real-photo units (agents/returns
 same bytes, so every photo is checked against its sha256 after download; a mismatch is reported, never hidden.
 Sources, authors and licences: data/input/RETURNS_PHOTOS.md and live_demo_sets/CREDITS.md.
 
+Where from: the exact files are attached to the repo's GitHub release (`release` in photos.json: release files are not
+in git). That is tried first; Commons is the fallback, because Commons does not always serve the same bytes for a
+resized copy (one of 32 photos came back different in some CI runs).
+
 `python scripts/dev.py setup`, `make setup` and the Docker build run this; without network the project still runs, the
 real-photo units and demo sets just are not available.
 """
@@ -29,6 +33,24 @@ UA = {"User-Agent": "CUBE-Pod05-PhotoFetch/1.0 (https://github.com/upeshchowdary
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def asset_name(path: str) -> str:
+    """The release file name for a repo path (release files cannot contain '/')."""
+    return path.replace("/", "__")
+
+
+def from_release(client, release: dict | None, entry: dict, dest: Path) -> bool:
+    """The exact bytes from the GitHub release; False if there is no release or the file is not there."""
+    if not release:
+        return False
+    url = f"https://github.com/{release['repo']}/releases/download/{release['tag']}/{asset_name(entry['path'])}"
+    r = client.get(url)
+    if r.status_code != 200:
+        return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(r.content)
+    return True
 
 
 def fetch(client, entry: dict, dest: Path) -> None:
@@ -58,19 +80,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="report only; download nothing")
     ap.add_argument("--root", type=Path, default=ROOT, help="where to put the photos (default: the repo)")
     args = ap.parse_args(argv)
-    entries = json.loads(MANIFEST.read_text(encoding="utf-8"))["photos"]
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    entries, release = manifest["photos"], manifest.get("release")
     todo = [e for e in entries if not (args.root / e["path"]).is_file() or sha256(args.root / e["path"]) != e["sha256"]]
     print(f"{len(entries) - len(todo)} of {len(entries)} photos present and verified")
     if args.check or not todo:
         return 1 if (args.check and todo) else 0
     import httpx
 
-    bad = []
+    bad, via_release = [], 0
     with httpx.Client(headers=UA, timeout=60, follow_redirects=True) as client:
         for e in todo:
             dest = args.root / e["path"]
-            # Commons now and then serves a thumbnail rendered differently (seen once in CI for one photo of 32):
-            # try again until the bytes are the recorded ones.
+            try:
+                if from_release(client, release, e, dest) and sha256(dest) == e["sha256"]:
+                    via_release += 1
+                    continue
+            except Exception:  # release unreachable: fall back to Commons
+                pass
+            # Commons now and then serves a thumbnail rendered differently: try again until the bytes are the recorded ones.
             for attempt in range(6):
                 try:
                     fetch(client, e, dest)
@@ -83,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             if not ok:
                 bad.append(f"{e['path']}: {why} after 6 tries (the recorded Gemini answer for it will not replay)")
             time.sleep(0.3)
-    print(f"downloaded {len(todo) - len(bad)} photo(s)")
+    print(f"downloaded {len(todo) - len(bad)} photo(s) ({via_release} from the GitHub release, the rest from Commons)")
     for b in bad:
         print("  WARNING", b)
     return 0  # never fail a setup or a build over photos: the units that need them report it themselves
