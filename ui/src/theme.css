@@ -145,16 +145,6 @@
 }
 .status-separator { width: 1px; height: 12px; background: var(--line-strong); }
 
-.blocked-banner {
-  background: linear-gradient(90deg, var(--amber-soft), #fffaf0 70%);
-  border: 1px solid rgba(168, 112, 29, 0.25);
-  border-left: 4px solid var(--amber);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-}
-.blocked-banner-title { font-family: var(--display); color: #6b4510; }
-.blocked-banner-desc { color: #7d5a26; }
-
 /* ── Page frame and entrance ───────────────────────────────────────────── */
 .page-shell, .page-stack { gap: 22px; max-width: 1480px; }
 .page-shell > *, .page-stack > * { animation: ledger-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }

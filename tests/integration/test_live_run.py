@@ -161,6 +161,26 @@ def test_the_shipped_demo_sets_are_valid_forms(client, monkeypatch):
         assert r.status_code == 201, (s["name"], r.text)
 
 
+def test_a_failed_model_call_is_retried_with_another_model_or_key(monkeypatch):
+    from orchestration import live_run
+    overloaded = {"code": "model_error", "message": "Gemini perception failed: 503 UNAVAILABLE. This model is currently "
+                                                    "experiencing high demand."}
+    assert live_run.retry_plan("receiving", overloaded) == "model"
+    assert live_run.retry_plan("returns", {"code": "model_call_failed:quota_exhausted"}) == "key"
+    assert live_run.retry_plan("returns", {"code": "model_call_failed:timeout"}) == "key"
+    assert live_run.retry_plan("pack", {"message": "VLM failure: HTTP 503 overloaded"}) == "key"  # one Groq model
+    assert live_run.retry_plan("returns", {"code": "no_reference_photo"}) is None  # another try cannot fix that
+    assert live_run.retry_plan("recovery", {"code": "model_call_failed:timeout"}) is None
+    monkeypatch.delenv("LIVE_GEMINI_MODELS", raising=False)
+    monkeypatch.delenv("LIVE_GEMINI_MODEL", raising=False)
+    monkeypatch.setenv("RETURNS_LIVE_MODEL", "unset")  # Models() writes these: restored after the test
+    monkeypatch.setenv("RECEIVING_MODEL", "unset")
+    m = live_run.Models()
+    assert m.models == list(live_run.GEMINI_MODELS) and m.advance()
+    import os
+    assert os.environ["RETURNS_LIVE_MODEL"] == os.environ["RECEIVING_MODEL"] == "gemini-3-flash-preview"
+
+
 def test_unknown_or_malformed_run_ids_are_404(client):
     assert client.get("/live/runs/LIVE-000000-ABCD").status_code == 404
     assert client.get("/live/runs/..%2F..%2Fpod").status_code == 404

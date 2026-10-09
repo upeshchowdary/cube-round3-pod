@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   Bot,
   ChevronRight,
   ChevronsLeft,
@@ -863,13 +862,8 @@ const sidebarItems = [
 
 function Shell() {
   const location = useLocation()
-  const { workflows, isBackendConnected, refreshData, openRunModal, openOverrideModal, handleResumeWorkflow } = useApp()
+  const { workflows, isBackendConnected, refreshData, openRunModal } = useApp()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
-  // Find if there is any active halted or blocked workflow to warn in banner
-  const blockedWorkflow = useMemo(() => {
-    return workflows.find((w) => w.status === 'BLOCKED' || Boolean(w.halted))
-  }, [workflows])
 
   if (location.pathname === '/') {
     return (
@@ -955,47 +949,6 @@ function Shell() {
         </header>
 
         <main className="router-shell">
-          {blockedWorkflow && (
-            <div style={{ padding: '16px 28px 0' }}>
-              <div className="blocked-banner">
-                <div className="blocked-banner-left">
-                  <div className="blocked-banner-icon">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div>
-                    <div className="blocked-banner-title">
-                      Workflow Blocked: {blockedWorkflow.workflow_id} ({blockedWorkflow.subject_id})
-                    </div>
-                    <div className="blocked-banner-desc">
-                      Stage &quot;{reviewTarget(blockedWorkflow)?.stage ?? blockedWorkflow.current_stage}&quot; requires human intervention —{' '}
-                      {blockedWorkflow.halted?.reason || blockedWorkflow.status_reason || 'Verdict uncertain'}
-                    </div>
-                  </div>
-                </div>
-                <div className="blocked-banner-actions">
-                  <button
-                    type="button"
-                    className="primary-button small"
-                    disabled={!reviewTarget(blockedWorkflow)}
-                    onClick={() => {
-                      const t = reviewTarget(blockedWorkflow)
-                      if (t) openOverrideModal(t)
-                    }}
-                  >
-                    Intervene & Override
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button small"
-                    onClick={() => handleResumeWorkflow(blockedWorkflow.workflow_id)}
-                  >
-                    Resume
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           <Routes>
             <Route path="/overview" element={<OverviewPage />} />
             <Route path="/live" element={<React.Suspense fallback={null}><LiveRunPage /></React.Suspense>} />
