@@ -38,7 +38,8 @@ STORE = FileStore()
 
 @app.get("/cases")
 def list_cases() -> list[dict]:
-    """The Pod's own cases (data/input/my_cases.json) first, then the dataset's cases.json.
+    """The Pod's own cases (data/input/my_cases.json, then the real-photo units in returns_photo_cases.json) first, then
+    the dataset's cases.json.
 
     With DATA_DIR pointing at a loaded dataset (scripts/dev.py dataset), only that dataset's cases are listed: the Pod's
     demo units are not in it.
@@ -46,7 +47,7 @@ def list_cases() -> list[dict]:
     out, seen = [], set()
     paths = [sample_data.data_dir() / "cases.json"]
     if sample_data.data_dir().resolve() == sample_data.DEFAULT_DIR.resolve():
-        paths.insert(0, ROOT / "data" / "input" / "my_cases.json")
+        paths[:0] = [ROOT / "data" / "input" / "my_cases.json", ROOT / "data" / "input" / "returns_photo_cases.json"]
     for path in paths:
         if path.exists():
             for case in json.loads(path.read_text()):
