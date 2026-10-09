@@ -1,7 +1,7 @@
 # Photo credits
 
 Real photos from Wikimedia Commons, used under their licences (downloaded 2026-10-10, resized to at most
-1600 px). They are product photos chosen to fit each scenario, not photos of an actual shipment or return.
+1600 px; not stored in git, see `scripts/fetch_photos.py`). They are product photos chosen to fit each scenario, not photos of an actual shipment or return.
 
 | Set | File | Original on Wikimedia Commons | Author | Licence |
 |---|---|---|---|---|

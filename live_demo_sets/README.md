@@ -29,7 +29,7 @@ Recovery) through the orchestrator, exactly as for anything typed in by hand, wi
 
 Each set folder holds:
 
-- `receiving/`, `pack/`, `returns/`: the photos for each agent that takes photos
+- `receiving/`, `pack/`, `returns/`: the photos for each agent that takes photos. **They are not stored in git:** `python scripts/fetch_photos.py` downloads them (`dev.py setup`, `make setup` and the Docker build run it) and checks each one against `data/photos.json`
 - `spec.json`: the form values (what the page fills in)
 - `INPUTS.md`: the same values in plain words, and **what happened when the set was run** through the real agents
 - `about.json`: title and story shown on the page

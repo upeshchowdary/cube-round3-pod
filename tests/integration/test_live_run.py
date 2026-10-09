@@ -144,6 +144,16 @@ def test_the_shipped_demo_sets_are_valid_forms(client, monkeypatch):
     """Every set in live_demo_sets/ passes the same validation as a hand-typed form (when the folder is present)."""
     if not live_demo.SETS.is_dir():
         pytest.skip("live_demo_sets/ not present")
+    import json
+    from pathlib import Path
+    root = Path(live_demo.ROOT)
+    photos = [p for p in json.loads((root / "data" / "photos.json").read_text(encoding="utf-8"))["photos"]
+              if p["path"].startswith("live_demo_sets/")]
+    if not all((root / p["path"]).is_file() for p in photos):  # the photos are not in git: scripts/fetch_photos.py
+        pytest.skip("demo set photos not downloaded: python scripts/fetch_photos.py")
+    for d in (p for p in live_demo.SETS.iterdir() if p.is_dir()):  # every photo a set uses is in the download list
+        for f in d.rglob("*.jpg"):
+            assert f.relative_to(root).as_posix() in {p["path"] for p in photos}, f
     monkeypatch.setattr(live_demo.subprocess, "Popen", lambda *a, **k: None)
     for s in client.get("/live/sets").json():
         spec = s["spec"] | {"photos": {stage: [{"name": "x.png", "data": _jpeg()}] for stage in s["photos"]}}

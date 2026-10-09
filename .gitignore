@@ -13,3 +13,4 @@ out_test/
 *.egg-info/
 # Real product photos are not stored in git: scripts/fetch_photos.py downloads them (list: data/photos.json)
 data/input/UNIT-C26RM-*/**/*.jpg
+live_demo_sets/**/*.jpg
