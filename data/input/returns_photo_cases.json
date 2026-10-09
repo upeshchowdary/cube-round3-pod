@@ -1,0 +1,142 @@
+[
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-001",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-002",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-012",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-015",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-022",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-031",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-041",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-044",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-032",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  },
+  {
+    "org_id": "org_demo_alpha",
+    "unit_id": "UNIT-C26RM-011",
+    "route": "mfn",
+    "returned": true,
+    "skip_stages": [
+      "receiving",
+      "recovery"
+    ],
+    "skip_reasons": {
+      "receiving": "no receiving input for this unit in the dataset",
+      "recovery": "Recovery needs the unit's Receiving row (its tenancy check), which the dataset lacks"
+    }
+  }
+]
