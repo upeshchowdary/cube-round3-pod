@@ -69,13 +69,19 @@ def main(argv: list[str] | None = None) -> int:
     with httpx.Client(headers=UA, timeout=60, follow_redirects=True) as client:
         for e in todo:
             dest = args.root / e["path"]
-            try:
-                fetch(client, e, dest)
-            except Exception as exc:  # no network, Commons down: report and carry on
-                bad.append(f"{e['path']}: download failed ({type(exc).__name__}: {exc})")
-                continue
-            if sha256(dest) != e["sha256"]:
-                bad.append(f"{e['path']}: downloaded, but not the recorded bytes (the recorded Gemini answer for it will not replay)")
+            # Commons now and then serves a thumbnail rendered differently (seen once in CI for one photo of 32):
+            # try again until the bytes are the recorded ones.
+            for attempt in range(6):
+                try:
+                    fetch(client, e, dest)
+                    ok, why = sha256(dest) == e["sha256"], "not the recorded bytes"
+                except Exception as exc:  # no network, Commons down
+                    ok, why = False, f"download failed ({type(exc).__name__}: {exc})"
+                if ok:
+                    break
+                time.sleep(2 * (attempt + 1))
+            if not ok:
+                bad.append(f"{e['path']}: {why} after 6 tries (the recorded Gemini answer for it will not replay)")
             time.sleep(0.3)
     print(f"downloaded {len(todo) - len(bad)} photo(s)")
     for b in bad:
