@@ -2224,6 +2224,7 @@ function RecoveryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFilter = searchParams.get('filter') ?? 'all'
   const { workflows } = useApp()
+  const navigate = useNavigate()
   const [loadedCharges, setCharges] = useState<RecoveryChargeItem[] | null>(null)
   const charges = loadedCharges ?? []
 
@@ -2294,9 +2295,9 @@ function RecoveryPage() {
               </tr>
             )}
             {filteredCharges.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} onClick={() => navigate(`/recovery/charges/${row.id}`)} style={{ cursor: 'pointer' }}>
                 <td>
-                  <Link to={`/recovery/charges/${row.id}`}>
+                  <Link to={`/recovery/charges/${row.id}`} onClick={(e) => e.stopPropagation()}>
                     <strong>{row.id}</strong>
                   </Link>
                 </td>
