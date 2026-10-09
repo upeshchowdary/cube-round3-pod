@@ -42,6 +42,20 @@
   overflow: hidden;
 }
 
+/* Collapsed, the toggle and the "C" mark do not fit side by side in 68px: stack them so the mark keeps its size. */
+.sidebar.collapsed .brand-block {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar.collapsed .brand-copy {
+  display: none;
+}
+
+.brand-mark {
+  flex-shrink: 0;
+}
+
 .collapse-toggle {
   width: 28px;
   height: 28px;
