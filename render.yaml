@@ -1,0 +1,17 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo. See docs/deploy-render.md.
+services:
+  - type: web
+    name: cube-pod05
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: LOG_LEVEL
+        value: WARNING
+      # Optional. Set in the Render dashboard, never in this file. Without them every agent runs in replay/rules mode.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

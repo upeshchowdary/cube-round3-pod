@@ -1,0 +1,28 @@
+# Hosted demo image (Render): the built UI and the orchestrator API in one service. See docs/deploy-render.md.
+
+# --- 1. build the UI
+FROM node:22-slim AS ui
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+COPY ui/ ./
+RUN npm run build
+
+# --- 2. Python app
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    LOG_LEVEL=WARNING
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+COPY --from=ui /ui/dist ui/dist
+
+# Run every case once at build time (replay mode, no keys needed), so the dashboard has data the moment the service
+# starts. Overrides and new runs made on the site are kept until the next deploy or restart (Render's disk is not kept).
+RUN python -m orchestration.run --all --fresh \
+ && python -m orchestration.run --all --cases data/input/my_cases.json
+
+EXPOSE 8100
+CMD ["sh", "-c", "exec uvicorn orchestration.web:app --host 0.0.0.0 --port ${PORT:-8100}"]
