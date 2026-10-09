@@ -8,6 +8,7 @@ Local development keeps using `uvicorn orchestration.api:app` + `npm run dev`.
 """
 from __future__ import annotations
 
+import mimetypes
 import os
 from pathlib import Path
 
@@ -18,6 +19,10 @@ from fastapi.staticfiles import StaticFiles
 from .api import app as api
 from .orchestrator import ROOT
 
+# The slim Docker image has no /etc/mime.types, so these would go out as application/octet-stream.
+for _type, _ext in (("image/webp", ".webp"), ("font/woff2", ".woff2"), ("font/woff", ".woff")):
+    mimetypes.add_type(_type, _ext)
+
 DIST = Path(os.environ.get("UI_DIST") or ROOT / "ui" / "dist").resolve()
 
 app = FastAPI(title="CUBE Pod 05", docs_url=None, redoc_url=None, openapi_url=None)
@@ -27,7 +32,7 @@ if (DIST / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
 
-@app.get("/{path:path}", include_in_schema=False)
+@app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 def ui(path: str):
     """A file from the build (cover images, favicon), else index.html so client-side routes like /workflows/x load."""
     index = DIST / "index.html"
