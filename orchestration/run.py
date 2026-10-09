@@ -1,6 +1,7 @@
 """CLI: run workflows, resume them, record overrides.
 
   python -m orchestration.run --all                                  # every sample case
+  python -m orchestration.run --all --fresh                          # same, old state -> out/_previous/<time>/ (last 3 kept)
   python -m orchestration.run --unit UNIT-0014 --org org_demo_alpha  # one workflow, printed in full
   python -m orchestration.run --all --flow orchestration/flow.specialist.json
   python -m orchestration.run --case examples/uncertain-path/case.json
@@ -14,6 +15,8 @@ import argparse
 import collections
 import json
 import os
+import shutil
+import time
 from pathlib import Path
 
 from shared.utils.schema import errors
@@ -22,6 +25,29 @@ from .orchestrator import apply_override, default_flow_path, load_flow, resume, 
 from .store import FileStore
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+KEEP_PREVIOUS = 3
+
+
+def set_aside(out: Path) -> Path | None:
+    """Move <out>/workflows and <out>/evidence to <out>/_previous/<timestamp>/, keeping the last KEEP_PREVIOUS sets, so
+    overrides people made in the UI stay readable after a few fresh runs. Returns the folder, or None if nothing moved."""
+    if not any((out / d).is_dir() for d in ("workflows", "evidence")):
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    target = out / "_previous" / stamp
+    n = 1
+    while target.exists():  # two runs in the same second
+        target, n = out / "_previous" / f"{stamp}-{n}", n + 1
+    target.mkdir(parents=True)
+    for d in ("workflows", "evidence"):
+        if (out / d).is_dir():
+            shutil.move(str(out / d), str(target / d))
+    for old in sorted((out / "_previous").iterdir())[:-KEEP_PREVIOUS]:
+        shutil.rmtree(old, ignore_errors=True)
+    print(f"previous workflows and evidence moved to {target}")
+    return target
 
 
 def main() -> int:
@@ -41,8 +67,14 @@ def main() -> int:
     ap.add_argument("--actor")
     ap.add_argument("--reason")
     ap.add_argument("--and-resume", action="store_true")
+    ap.add_argument("--fresh", action="store_true",
+                    help="move the existing workflows/ and evidence/ to <out>/_previous/<time>/ first (the last 3 are "
+                         "kept), so every case runs on the "
+                         "current agents (an existing workflow is otherwise continued, keeping what older code recorded)")
     args = ap.parse_args()
 
+    if args.fresh:
+        set_aside(Path(args.out))
     store, flow = FileStore(args.out), load_flow(args.flow)
     if args.override:
         if not (args.record and args.verdict and args.actor and args.reason):

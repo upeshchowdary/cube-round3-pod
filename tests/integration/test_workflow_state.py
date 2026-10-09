@@ -329,3 +329,22 @@ def test_agent_that_cannot_be_imported_is_recorded_not_a_crash():
     assert by_stage["returns"]["error"]["code"] == "agent_exception"
     assert by_stage["recovery"]["state"] == "completed"
     assert valid(wf)["status"] == "FAILED"
+
+
+def test_run_fresh_sets_old_state_aside_instead_of_continuing_it(tmp_path):
+    """`run --fresh` (dev.py run / make run): a workflow left by older agent code is moved to _previous/<time>/, not
+    continued, and the last KEEP_PREVIOUS sets survive back-to-back runs."""
+    from orchestration.run import KEEP_PREVIOUS, set_aside
+    from orchestration.store import FileStore
+    store = FileStore(tmp_path)
+    old = run_workflow(CASE, STANDARD, store, fakes(prep="FAIL"))
+    first = set_aside(tmp_path)
+    assert (first / "workflows" / f"{old['workflow_id']}.json").is_file()
+    store = FileStore(tmp_path)
+    assert store.load_workflow(old["workflow_id"]) is None
+    assert run_workflow(CASE, STANDARD, store, fakes())["final_outcome"]["outcome"] == "CLEAN"
+    for _ in range(KEEP_PREVIOUS + 1):  # several runs within the same second
+        set_aside(tmp_path)
+        FileStore(tmp_path)  # recreates the empty folders, as a run does
+    assert len(list((tmp_path / "_previous").iterdir())) == KEEP_PREVIOUS
+    assert set_aside(tmp_path / "nothing-here") is None

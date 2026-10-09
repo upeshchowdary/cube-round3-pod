@@ -106,7 +106,8 @@ def test(args) -> int:
 def run(args) -> int:
     need_venv()
     env = {"LOG_LEVEL": os.environ.get("LOG_LEVEL", "WARNING")}
-    rc = sh([str(VPY), "-m", "orchestration.run", "--all"], env=env)
+    # --fresh: workflows left in out/ by older agent code would otherwise be continued and shown as they were.
+    rc = sh([str(VPY), "-m", "orchestration.run", "--all", "--fresh"], env=env)
     return rc or sh([str(VPY), "-m", "orchestration.run", "--all", "--cases", "data/input/my_cases.json"], env=env)
 
 
