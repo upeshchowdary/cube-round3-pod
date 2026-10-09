@@ -30,6 +30,7 @@ from .store import EvidenceConflict, MemoryStore, TenantConflict
 
 ROOT = Path(__file__).resolve().parents[1]
 logger = get_logger("orchestrator")
+VERDICTS = ("PASS", "FAIL", "UNCERTAIN")
 KINDS = {".jpg": "image", ".jpeg": "image", ".png": "image", ".webp": "image", ".heic": "image",
          ".mp4": "video", ".mov": "video", ".pdf": "document", ".csv": "document", ".json": "document", ".txt": "document"}
 
@@ -94,9 +95,12 @@ def new_workflow(case: dict, flow: dict) -> dict:
     """A PENDING workflow with every stage listed and routing already decided."""
     now = utcnow()
     subject_id = case.get("subject_id") or case["unit_id"]
+    no_input = set(case.get("skip_stages") or [])  # stages the dataset has no input for (sample_data.case_for)
     stage_results = []
     for step in flow["steps"]:
         ok, why = applies(step, case)
+        if ok and step["stage"] in no_input:
+            ok, why = False, (case.get("skip_reasons") or {}).get(step["stage"]) or f"no {step['stage']} input in the dataset"
         try:
             agent_id = load_manifest(step["stage"])["agent_id"]
         except FileNotFoundError:
@@ -313,6 +317,8 @@ def apply_override(workflow_id: str, store, *, record_id: str, new_verdict: str,
     the new entry references the evidence and the previous effective decision, and the state is re-derived."""
     if not actor.strip() or not reason.strip():
         raise ValueError("an override needs an actor and a reason")
+    if new_verdict not in VERDICTS:
+        raise ValueError(f"new_verdict must be one of {', '.join(VERDICTS)}, got {new_verdict!r}")
     wf = store.load_workflow(workflow_id)
     if wf is None:
         raise KeyError(workflow_id)

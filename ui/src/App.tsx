@@ -53,7 +53,8 @@ import '@fontsource-variable/jetbrains-mono'
 import './App.css'
 import './theme.css'
 import { exampleAgents } from './data'
-import CoverPage from './cover/CoverPage'
+// The cover page brings three.js, GSAP and Lenis: load it only when / is opened, not with the control center.
+const CoverPage = React.lazy(() => import('./cover/CoverPage'))
 import { StageEvidence } from './components/StageEvidence'
 import {
   api,
@@ -219,21 +220,31 @@ interface RecoveryChargeItem {
   reason: string
 }
 
-/** Every fee line Recovery judged, read from the evidence of each workflow's current Recovery record. */
+/** Every fee line Recovery judged, from each workflow's current Recovery record: one GET /recovery/charges call.
+ *  (It used to fetch every workflow's evidence bundle, about 100 requests, again on each 15-second refresh.) An older
+ *  API without that endpoint still works through the per-workflow bundles. */
 async function loadCharges(workflows: WorkflowState[]): Promise<RecoveryChargeItem[]> {
+  let items: Array<{ workflowId: string; reason: string; charges: any[] }>
+  try {
+    items = (await api.recoveryCharges()).map((r) => ({ workflowId: r.workflow_id, reason: r.reason || '', charges: r.charges }))
+  } catch {
+    const withRecovery = workflows.filter((w) => w.stage_results.some((s) => s.stage === 'recovery' && s.state === 'completed'))
+    const bundles = await Promise.allSettled(withRecovery.map((w) => api.getEvidence(w.workflow_id)))
+    items = []
+    bundles.forEach((b, i) => {
+      if (b.status !== 'fulfilled') return
+      const rid = withRecovery[i].stage_results.find((s) => s.stage === 'recovery')?.record_id
+      const rec = rid ? b.value.evidence[rid] : undefined
+      items.push({ workflowId: withRecovery[i].workflow_id, reason: rec?.decision?.reason || '', charges: (rec?.payload?.charges ?? []) as any[] })
+    })
+  }
   const out: RecoveryChargeItem[] = []
-  const withRecovery = workflows.filter((w) => w.stage_results.some((s) => s.stage === 'recovery' && s.state === 'completed'))
-  const bundles = await Promise.allSettled(withRecovery.map((w) => api.getEvidence(w.workflow_id)))
-  bundles.forEach((b, i) => {
-    if (b.status !== 'fulfilled') return
-    const wf = withRecovery[i]
-    const rid = wf.stage_results.find((s) => s.stage === 'recovery')?.record_id
-    const rec = rid ? b.value.evidence[rid] : undefined
-    for (const c of (rec?.payload?.charges ?? []) as any[]) {
+  for (const item of items) {
+    for (const c of item.charges) {
       const amt = typeof c.amount_usd === 'number' ? c.amount_usd : parseFloat(c.amount_usd) || 0
       out.push({
         id: c.line_id,
-        workflowId: wf.workflow_id,
+        workflowId: item.workflowId,
         type: String(c.charge_type || 'fee').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
         amount: `$${amt.toFixed(2)}`,
         amountNum: amt,
@@ -241,10 +252,10 @@ async function loadCharges(workflows: WorkflowState[]): Promise<RecoveryChargeIt
         evidence: (c.evidence_record_ids || []).join(', ') || 'none',
         evidenceIds: c.evidence_record_ids || [],
         decision: c.position === 'CONTRADICTS' ? 'CLAIM RECOMMENDED' : 'NO CLAIM',
-        reason: c.reason || rec?.decision?.reason || '',
+        reason: c.reason || item.reason,
       })
     }
-  })
+  }
   return out
 }
 
@@ -403,7 +414,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
                    background: '#fbecea', color: '#8a3a33', border: '1px solid #e2b4ae', fontSize: 13,
                    display: 'flex', justifyContent: 'space-between', gap: 12 }}
         >
-          <span>{apiError ?? 'Orchestrator API unreachable: nothing below is live until it is back (start it with `make serve`).'}</span>
+          <span>{apiError ?? 'Orchestrator API unreachable: nothing below is live until it is back (start it with `python scripts/dev.py serve`, or `make serve`).'}</span>
           {apiError && <button type="button" className="secondary-button small" onClick={() => setApiError(null)}>Dismiss</button>}
         </div>
       )}
@@ -859,7 +870,11 @@ function Shell() {
   }, [workflows])
 
   if (location.pathname === '/') {
-    return <CoverPage />
+    return (
+      <React.Suspense fallback={null}>
+        <CoverPage />
+      </React.Suspense>
+    )
   }
 
   return (
@@ -2209,6 +2224,7 @@ function RecoveryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFilter = searchParams.get('filter') ?? 'all'
   const { workflows } = useApp()
+  const navigate = useNavigate()
   const [loadedCharges, setCharges] = useState<RecoveryChargeItem[] | null>(null)
   const charges = loadedCharges ?? []
 
@@ -2279,9 +2295,9 @@ function RecoveryPage() {
               </tr>
             )}
             {filteredCharges.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} onClick={() => navigate(`/recovery/charges/${row.id}`)} style={{ cursor: 'pointer' }}>
                 <td>
-                  <Link to={`/recovery/charges/${row.id}`}>
+                  <Link to={`/recovery/charges/${row.id}`} onClick={(e) => e.stopPropagation()}>
                     <strong>{row.id}</strong>
                   </Link>
                 </td>
@@ -2809,7 +2825,7 @@ function AnalyticsPage() {
                 </defs>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="agent" tickLine={false} axisLine={false} dy={6} />
-                <YAxis unit="s" tickLine={false} axisLine={false} tickFormatter={(v: number) => String(Math.round(v * 100) / 100)} />
+                <YAxis unit="s" tickLine={false} axisLine={false} tickFormatter={(v: number) => String(Math.round(v * 1000) / 1000)} />
                 <Tooltip formatter={(v) => [`${v}s`, 'Mean stage time']} />
                 <Area type="monotone" dataKey="latency" name="Mean stage time (s)" stroke="#16a34a" strokeWidth={3}
                       fill="url(#stageTimeFill)" dot={{ r: 4, fill: '#fff', stroke: '#16a34a', strokeWidth: 2 }} activeDot={{ r: 6 }} />

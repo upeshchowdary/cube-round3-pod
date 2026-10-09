@@ -21,8 +21,8 @@ e2e:              ## just the end-to-end tests
 	$(BIN)/python -m pytest tests/e2e
 
 run: export LOG_LEVEL = WARNING
-run:              ## run every sample workflow; state -> out/workflows/*.json, evidence -> out/evidence/*.json
-	$(BIN)/python -m orchestration.run --all
+run:              ## run every sample workflow afresh (old state -> out/_previous/); state -> out/workflows, evidence -> out/evidence
+	$(BIN)/python -m orchestration.run --all --fresh
 
 case:             ## one workflow, full JSON:  make case UNIT=UNIT-0014 ORG=org_demo_alpha
 	@$(BIN)/python -m orchestration.run --unit $(UNIT) --org $(ORG)

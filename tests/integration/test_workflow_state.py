@@ -243,6 +243,15 @@ def test_override_needs_actor_reason_and_real_evidence():
         apply_override(wf["workflow_id"], store, record_id="RCV-NOPE", new_verdict="PASS", actor="a", reason="x")
 
 
+@pytest.mark.parametrize("verdict", ["MAYBE", "pass", "", None])
+def test_override_refuses_a_verdict_outside_pass_fail_uncertain(verdict):
+    wf, store = run()
+    rid = wf["evidence_references"][0]
+    with pytest.raises(ValueError):
+        apply_override(wf["workflow_id"], store, record_id=rid, new_verdict=verdict, actor="a", reason="x")
+    assert store.load_workflow(wf["workflow_id"])["overrides"] == []  # nothing was stored
+
+
 # ------------------------------------------------------------ evidence is immutable and the chain is traceable
 def test_evidence_cannot_be_replaced():
     wf, store = run()
@@ -320,3 +329,22 @@ def test_agent_that_cannot_be_imported_is_recorded_not_a_crash():
     assert by_stage["returns"]["error"]["code"] == "agent_exception"
     assert by_stage["recovery"]["state"] == "completed"
     assert valid(wf)["status"] == "FAILED"
+
+
+def test_run_fresh_sets_old_state_aside_instead_of_continuing_it(tmp_path):
+    """`run --fresh` (dev.py run / make run): a workflow left by older agent code is moved to _previous/<time>/, not
+    continued, and the last KEEP_PREVIOUS sets survive back-to-back runs."""
+    from orchestration.run import KEEP_PREVIOUS, set_aside
+    from orchestration.store import FileStore
+    store = FileStore(tmp_path)
+    old = run_workflow(CASE, STANDARD, store, fakes(prep="FAIL"))
+    first = set_aside(tmp_path)
+    assert (first / "workflows" / f"{old['workflow_id']}.json").is_file()
+    store = FileStore(tmp_path)
+    assert store.load_workflow(old["workflow_id"]) is None
+    assert run_workflow(CASE, STANDARD, store, fakes())["final_outcome"]["outcome"] == "CLEAN"
+    for _ in range(KEEP_PREVIOUS + 1):  # several runs within the same second
+        set_aside(tmp_path)
+        FileStore(tmp_path)  # recreates the empty folders, as a run does
+    assert len(list((tmp_path / "_previous").iterdir())) == KEEP_PREVIOUS
+    assert set_aside(tmp_path / "nothing-here") is None

@@ -156,6 +156,14 @@ export interface EvidenceBundle {
   evidence: Record<string, EvidenceRecord>
 }
 
+/** One workflow's current Recovery record, as GET /recovery/charges returns it. */
+export interface RecoveryChargesItem {
+  workflow_id: string
+  record_id: string
+  reason: string | null
+  charges: Array<Record<string, any>>
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 export function workflowIdFor(orgId: string, unitId: string): string {
@@ -188,6 +196,8 @@ export const api = {
   getWorkflow: (id: string) => req<WorkflowState>(`/workflows/${id}`),
 
   getEvidence: (id: string) => req<EvidenceBundle>(`/workflows/${id}/evidence`),
+
+  recoveryCharges: () => req<RecoveryChargesItem[]>('/recovery/charges'),
 
   resumeWorkflow: (id: string) =>
     req<WorkflowState>(`/workflows/${id}/resume`, { method: 'POST' }),

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from orchestration import api
 from orchestration.orchestrator import load_flow, run_workflow
-from orchestration.store import FileStore, MemoryStore, TenantConflict
+from orchestration.store import EvidenceConflict, FileStore, MemoryStore, TenantConflict
 from tests.helpers import Fake
 
 CASE = {"org_id": "org_demo_alpha", "unit_id": "UNIT-0014", "route": "fba", "returned": True}
@@ -62,3 +62,27 @@ def test_api_hides_another_orgs_workflow(tmp_path, monkeypatch):
     assert client.get(f"/workflows/{wid}", params={"org_id": "org_demo_bravo"}).status_code == 404
     assert client.get(f"/workflows/{wid}/evidence", params={"org_id": "org_demo_bravo"}).status_code == 404
     assert client.post(f"/workflows/{wid}/resume", params={"org_id": "org_demo_bravo"}).status_code == 404
+
+
+def test_file_store_ids_cannot_reach_files_outside_the_store(tmp_path):
+    r"""Ids arrive in URLs: '..\..\pod' (or '../x') must read as missing, never as another .json on the disk."""
+    root = tmp_path / "out"
+    store = FileStore(root)
+    (tmp_path / "secret.json").write_text('{"org_id": "org_demo_alpha", "workflow_id": "x"}')
+    for bad in ("../../secret", r"..\..\secret", "../secret", "C:secret", ".hidden", ""):
+        assert store.load_workflow(bad) is None
+        assert store.get_evidence(bad) is None
+    with pytest.raises(EvidenceConflict):  # the orchestrator records it as invalid_output; nothing is written
+        store.put_evidence({"record_id": "../escape", "subject": {"org_id": "org_demo_alpha"}, "content_hash": "h"})
+    assert not (tmp_path / "escape.json").exists()
+
+
+def test_api_override_with_an_invalid_verdict_is_a_422(tmp_path, monkeypatch):
+    monkeypatch.setattr(api, "STORE", FileStore(tmp_path))
+    wf = run_workflow(CASE, load_flow(), api.STORE, fakes())
+    client = TestClient(api.app)
+    r = client.post(f"/workflows/{wf['workflow_id']}/overrides",
+                    json={"record_id": wf["evidence_references"][0], "new_verdict": "MAYBE", "actor": "a", "reason": "x"})
+    assert r.status_code == 422 and "PASS, FAIL, UNCERTAIN" in r.json()["detail"]
+    assert client.get(f"/workflows/{wf['workflow_id']}").json()["overrides"] == []
+    assert client.get(r"/workflows/..\..\pod").status_code == 404

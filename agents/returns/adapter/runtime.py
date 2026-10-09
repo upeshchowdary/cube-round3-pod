@@ -7,12 +7,10 @@ from typing import Any
 
 import httpx
 
-from returns_manager.batch.runner import _NoDbQuota
 from returns_manager.config import Settings
 from returns_manager.llm.client import ModelClient
 from returns_manager.llm.gemini_client import GeminiModelClient
 from returns_manager.llm.replay_client import (
-    CassetteMismatch,
     RecordingModelClient,
     ReplayModelClient,
 )
