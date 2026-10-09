@@ -1,5 +1,9 @@
 {
-  "about": "Real product photos used by the repo but not stored in git. scripts/fetch_photos.py downloads them from Wikimedia Commons and checks each sha256. Credits: data/input/RETURNS_PHOTOS.md, live_demo_sets/CREDITS.md.",
+  "about": "Real product photos used by the repo but not stored in git. scripts/fetch_photos.py downloads them (the exact files from the GitHub release below, else from Wikimedia Commons) and checks each sha256. Credits: data/input/RETURNS_PHOTOS.md, live_demo_sets/CREDITS.md.",
+  "release": {
+    "repo": "upeshchowdary/cube-round3-pod",
+    "tag": "photos-v1"
+  },
   "photos": [
     {
       "path": "data/input/UNIT-C26RM-001/pack/open_box.jpg",
