@@ -25,6 +25,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import {
   BrowserRouter,
   Link,
+  Navigate,
   NavLink,
   Route,
   Routes,
@@ -53,18 +54,19 @@ import '@fontsource-variable/jetbrains-mono'
 import './App.css'
 import './theme.css'
 import { exampleAgents } from './data'
-// The cover page brings three.js, GSAP and Lenis: load it only when / is opened, not with the control center.
-const CoverPage = React.lazy(() => import('./cover/CoverPage'))
-const LiveRunPage = React.lazy(() => import('./live/LiveRunPage'))
 import { LoginPage } from './components/LoginPage'
 import {
   getStoredSession,
   logoutSession,
   mapSupabaseUserToSession,
   saveStoredSession,
+  stillSignedIn,
   supabase,
   type UserSession,
 } from './services/supabase'
+// The cover page brings three.js, GSAP and Lenis: load it only when / is opened, not with the control center.
+const CoverPage = React.lazy(() => import('./cover/CoverPage'))
+const LiveRunPage = React.lazy(() => import('./live/LiveRunPage'))
 import { StageEvidence } from './components/StageEvidence'
 import {
   api,
@@ -327,6 +329,13 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<UserSession | null>(() => getStoredSession())
 
   useEffect(() => {
+    // A stored Supabase sign-in that Supabase no longer has (signed out elsewhere, expired) is dropped.
+    stillSignedIn(getStoredSession()).then((ok) => {
+      if (!ok) {
+        setSession(null)
+        saveStoredSession(null)
+      }
+    })
     if (!supabase) return
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       if (s?.user) {
@@ -650,8 +659,9 @@ function OverrideModal({
   onClose: () => void
 }) {
   const { handleApplyOverride, session } = useApp()
-  // Pre-filled with logged-in operator identity, editable if desired
-  const [actor, setActor] = useState(session?.name || session?.email || '')
+  // An override must name the real person who made it: pre-filled only from a verified (Supabase) account, never from
+  // a demo profile, whose name is invented.
+  const [actor, setActor] = useState(session?.provider === 'supabase' ? session.name || session.email : '')
   const [newVerdict, setNewVerdict] = useState<'PASS' | 'FAIL' | 'UNCERTAIN'>('PASS')
   const [reason, setReason] = useState('')
   const [newOutcome, setNewOutcome] = useState('')
@@ -933,7 +943,7 @@ function Shell() {
     )
   }
 
-  if (location.pathname === '/login' || !session) {
+  if (!session) {
     return <LoginPage onLoginSuccess={(s) => login(s)} />
   }
 
@@ -1054,7 +1064,7 @@ function Shell() {
             <Route path="/overview" element={<OverviewPage />} />
             <Route path="/live" element={<React.Suspense fallback={null}><LiveRunPage /></React.Suspense>} />
             <Route path="/dashboard" element={<OverviewPage />} />
-            <Route path="/login" element={<LoginPage onLoginSuccess={(s) => login(s)} />} />
+            <Route path="/login" element={<Navigate to="/overview" replace />} />
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
             <Route path="/units" element={<UnitsPage />} />

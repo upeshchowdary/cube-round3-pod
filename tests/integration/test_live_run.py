@@ -180,7 +180,7 @@ def test_a_failed_model_call_is_retried_with_another_model_or_key(monkeypatch):
     m = live_run.Models()
     assert m.models == list(live_run.GEMINI_MODELS) and m.advance()
     import os
-    assert os.environ["RETURNS_LIVE_MODEL"] == os.environ["RECEIVING_MODEL"] == "gemini-3-flash-preview"
+    assert os.environ["RETURNS_LIVE_MODEL"] == os.environ["RECEIVING_MODEL"] == live_run.GEMINI_MODELS[1]
 
 
 class _FakeAgent:
@@ -222,8 +222,29 @@ def test_an_overloaded_model_is_retried_at_once_on_the_next_model(switcher):
     agent = _FakeAgent([_out("pending", "model_error", "503 UNAVAILABLE high demand"), _out("completed")])
     out = live_run.Retrying("receiving", agent, sw).run({}, 30)
     assert out["evidence"]["status"] == "completed"
-    assert [s[0] for s in agent.seen] == ["gemini-3.8-flash", "gemini-3-flash-preview"]
+    assert [s[0] for s in agent.seen] == list(live_run.GEMINI_MODELS[:2])
     assert "could not answer" in json.loads((run / "status.json").read_text())["notes"][0]["text"]
+
+
+def test_a_model_switch_for_one_stage_does_not_carry_over_to_the_next(switcher):
+    """Live run LIVE-152639-233B: Receiving got a brief 503 on the fastest model and switched; Returns then started on
+    the slower one and took minutes. Each stage starts on the fastest model again."""
+    live_run, sw, _ = switcher
+    receiving = _FakeAgent([_out("pending", "model_error", "503 UNAVAILABLE high demand"), _out("completed")])
+    live_run.Retrying("receiving", receiving, sw).run({}, 30)
+    returns = _FakeAgent([_out("completed")])
+    live_run.Retrying("returns", returns, sw).run({}, 30)
+    assert [s[0] for s in receiving.seen] == list(live_run.GEMINI_MODELS[:2])
+    assert returns.seen[0][0] == live_run.GEMINI_MODELS[0]
+
+
+def test_a_model_that_timed_out_is_skipped_by_later_stages(switcher):
+    live_run, sw, _ = switcher
+    receiving = _FakeAgent([_out("pending", "model_call_failed:timeout", "model request timed out"), _out("completed")])
+    live_run.Retrying("receiving", receiving, sw).run({}, 30)
+    returns = _FakeAgent([_out("completed")])
+    live_run.Retrying("returns", returns, sw).run({}, 30)
+    assert returns.seen[0][0] == live_run.GEMINI_MODELS[1], "no second 90 s wait on the model that just timed out"
 
 
 def test_used_up_keys_move_to_the_next_model_with_the_keys_from_the_start(switcher):
@@ -232,18 +253,51 @@ def test_used_up_keys_move_to_the_next_model_with_the_keys_from_the_start(switch
     agent = _FakeAgent([quota, quota, _out("completed")])
     out = live_run.Retrying("returns", agent, sw).run({}, 30)
     assert out["evidence"]["status"] == "completed"
-    assert [(m, k) for m, k, _ in agent.seen] == [("gemini-3.8-flash", "k1"), ("gemini-3.8-flash", "k2"),
-                                                  ("gemini-3-flash-preview", "k1")]
+    first, second = live_run.GEMINI_MODELS[:2]
+    assert [(m, k) for m, k, _ in agent.seen] == [(first, "k1"), (first, "k2"), (second, "k1")]
 
 
-def test_receiving_judges_the_typed_counts_when_no_gemini_option_works(switcher):
+def test_receiving_judges_the_typed_counts_when_no_gemini_option_works(switcher, monkeypatch):
     live_run, sw, run = switcher
+    monkeypatch.setattr(live_run, "WAIT_S", 0)
     overloaded = _out("pending", "model_error", "503 UNAVAILABLE")
-    agent = _FakeAgent([overloaded, overloaded, overloaded, _out("completed")])  # 3 models overloaded, then replay
+    # 3 models overloaded, then after each of the 2 waits the 3 models again, then Receiving judges the typed counts
+    agent = _FakeAgent([overloaded] * 9 + [_out("completed")])
     out = live_run.Retrying("receiving", agent, sw).run({}, 30)
     assert out["evidence"]["status"] == "completed"
     assert agent.seen[-1][2] == "replay"
     assert "judged the counts typed into the form" in json.loads((run / "status.json").read_text())["notes"][-1]["text"]
+
+
+OTPM = ('VLM failure (RuntimeError): vision request failed (HTTP 429): {"error":{"message":"Request too large for model '
+        '`qwen/qwen3.8-27b` ... on output tokens per minute (OTPM): Limit 1000, Requested 1200"}}')
+
+
+def test_groq_per_minute_limit_on_every_key_waits_and_tries_again(switcher, monkeypatch):
+    live_run, sw, run = switcher
+    monkeypatch.setattr(live_run, "WAIT_S", 0)
+    monkeypatch.setenv("GROQ_API_KEYS", "g1,g2")
+    sw.groq = live_run.Keys("Groq", "GROQ_API_KEY", "GROQ_API_KEYS")
+    limited = _out("pending", "VLM_TIMEOUT_OR_FAILURE", OTPM)
+    agent = _FakeAgent([limited, limited, _out("completed")])  # g1, g2, then after the wait g1 again
+    out = live_run.Retrying("pack", agent, sw).run({}, 30)
+    assert out["evidence"]["status"] == "completed"
+    notes = [n["text"] for n in json.loads((run / "status.json").read_text())["notes"]]
+    assert "Groq key 1 failed" in notes[0] and "Waiting 0 s" in notes[1]
+
+
+def test_a_daily_quota_is_not_waited_for(switcher, monkeypatch):
+    live_run, sw, _ = switcher
+    monkeypatch.setattr(live_run, "WAIT_S", 0)
+    daily = _out("pending", "model_call_failed:quota_exhausted", "429 RESOURCE_EXHAUSTED: daily request quota used up")
+    agent = _FakeAgent([daily] * 6)  # 2 keys x 3 models, then nothing left and no wait
+    out = live_run.Retrying("returns", agent, sw).run({}, 30)
+    assert out["evidence"]["status"] != "completed" and agent.outputs == []
+
+
+def test_groq_malformed_json_is_retried():
+    from orchestration import live_run
+    assert live_run.retry_plan("pack", {"message": "vision request failed (HTTP 400): Failed to generate JSON"}) == "key"
 
 
 def test_unknown_or_malformed_run_ids_are_404(client):

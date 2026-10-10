@@ -6,6 +6,12 @@ WORKDIR /ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci
 COPY ui/ ./
+# Login (Supabase): Render passes the service's environment variables as build args. Vite bakes these two public
+# values into the bundle; without them the login page offers only the demo profiles.
+ARG VITE_SUPABASE_URL=""
+ARG VITE_SUPABASE_ANON_KEY=""
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 RUN npm run build
 
 # --- 2. Python app

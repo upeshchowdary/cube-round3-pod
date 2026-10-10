@@ -15,3 +15,9 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # Optional: login with real accounts. Public values (they ship in the page), passed to the UI build by the
+      # Dockerfile. Without them the login page offers only the demo profiles.
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

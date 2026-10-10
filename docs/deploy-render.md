@@ -8,6 +8,7 @@ One Render **web service** runs everything: the built UI at `/` and the orchestr
 2. Go to **New → Blueprint** and pick this repository. Render reads `render.yaml`.
 3. Pick the branch to deploy (`main`).
 4. Render asks for `GEMINI_API_KEY` and `GROQ_API_KEY`. Both are optional; leave them blank to run every agent in replay/rules mode. **Paste keys only here, never in a file.**
+   It also asks for `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (the login, optional). They are used when the image is built, so after adding or changing them on an existing service, run **Manual Deploy → Deploy latest commit**.
 5. Click **Apply**. The first build takes about 5 minutes. The site is then live at `https://upesh-cube-pod05.onrender.com` (if that name is taken, Render adds a short suffix). The name comes from `name:` in `render.yaml` and is fixed when the service is created: renaming the service later does not change the link.
 
 After that, every push to the branch redeploys on its own.
@@ -17,7 +18,7 @@ After that, every push to the branch redeploys on its own.
 - **The data is ready at start-up.** The image runs every sample case and the Pod's own cases while it builds (replay mode, no keys used), so the dashboard is full as soon as the service starts.
 - **Changes on the site are temporary.** Overrides and new workflow runs are saved to the container's disk, and Render resets that disk on every deploy and restart. Each deploy starts again from the same clean state.
 - **The free plan sleeps.** After 15 minutes without visitors, the first request takes about a minute while the service wakes up. Open the site a minute before you present it.
-- **There is no login.** Anyone with the link can record an override or start a workflow, and the next deploy wipes it. Do not put real customer data in it.
+- **The login guards the pages, not the API.** The control center asks for a sign-in (a Supabase account, or one of the demo profiles), but `/api` itself does not check it: anyone with the link can still call the API, record an override or start a workflow, and the next deploy wipes it. Do not put real customer data in it.
 
 ## Check it
 

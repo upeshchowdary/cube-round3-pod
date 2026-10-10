@@ -92,9 +92,12 @@
 .lr-step.completed .lr-dot { background: var(--mint); border-color: var(--mint); color: #fff; }
 .lr-step.error .lr-dot { background: var(--clay); border-color: var(--clay); color: #fff; }
 .lr-step.skipped { opacity: 0.6; }
+.lr-step.halted { border-color: var(--clay); background: var(--clay-soft); }
+.lr-step.halted .lr-dot { border-color: var(--clay); color: var(--clay); }
 @keyframes lr-pulse { 50% { transform: scale(1.15); } }
 @media (prefers-reduced-motion: reduce) { .lr-step.running .lr-dot { animation: none; } }
 
+.lr-halt { border-left: 3px solid var(--clay); background: var(--clay-soft); padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
 .lr-notes { border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 8px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; }
 
 .lr-results h3 { font-family: var(--display); font-size: 18px; font-weight: 700; margin: 8px 0 12px; }
