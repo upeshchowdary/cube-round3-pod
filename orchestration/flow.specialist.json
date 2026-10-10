@@ -11,7 +11,8 @@
           "mfn"
         ]
       },
-      "stage": "pack"
+      "stage": "pack",
+      "needs_confirmed_product": true
     },
     {
       "when": {
@@ -20,7 +21,8 @@
         ]
       },
       "stage": "returns",
-      "rerun_when_upstream_changes": true
+      "rerun_when_upstream_changes": true,
+      "needs_confirmed_product": true
     },
     {
       "stage": "recovery",

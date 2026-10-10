@@ -162,6 +162,8 @@ function Section({ n, title, who, children, note }: { n: number; title: string; 
 function stageState(stage: Stage, run: RunView | null): { state: string; sr?: StageResult } {
   const sr = run?.workflow?.stage_results.find((s) => s.stage === stage)
   if (run && run.running_stage === stage && (!sr || sr.state === 'pending' || sr.state === 'error') && run.status.state !== 'done') return { state: 'running', sr }
+  // A halted workflow leaves its later stages pending: once the run is over they are stopped, not waiting.
+  if (sr?.state === 'pending' && run?.workflow?.halted && run.status.state === 'done') return { state: 'halted', sr }
   if (sr?.state === 'pending' || (!sr && run)) return { state: 'waiting', sr }
   return { state: sr?.state ?? 'idle', sr }
 }
@@ -485,7 +487,7 @@ export default function LiveRunPage() {
                           ? usesAi
                             ? stage === 'returns' ? 'Gemini is comparing the returned item with the reference photo (about a minute)…' : 'looking at the photos with AI…'
                             : 'processing…'
-                          : state === 'skipped' ? sr?.skipped_reason : state === 'waiting' ? 'waiting for earlier agents' : state === 'idle' ? AGENTS[stage].owner : ''}
+                          : state === 'skipped' ? sr?.skipped_reason : state === 'halted' ? 'not run: stopped for a person (see below)' : state === 'waiting' ? 'waiting for earlier agents' : state === 'idle' ? AGENTS[stage].owner : ''}
                       </span>
                       {sr?.verdict && state !== 'running' && (
                         <span className="lr-step-verdict">
@@ -499,6 +501,11 @@ export default function LiveRunPage() {
               })}
             </ol>
 
+            {run?.workflow?.halted && run.status.state === 'done' && (
+              <div className="lr-halt">
+                <b>Stopped before {AGENTS[run.workflow.halted.stage as Stage]?.name ?? run.workflow.halted.stage}.</b> {run.workflow.halted.reason}.
+              </div>
+            )}
             {(run?.status.notes ?? []).length > 0 && (
               <div className="lr-notes">
                 {run!.status.notes!.map((n) => <p key={n.at + n.text}><b>{n.at}</b> {n.text}</p>)}

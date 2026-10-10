@@ -1,6 +1,6 @@
 {
   "flow_id": "standard-v1",
-  "description": "Receiving -> Prep (FBA units) | Pack (merchant-fulfilled units) -> Returns (if a return happened) -> Recovery. Returns and Recovery judge with upstream evidence, so resume re-runs them when that evidence or an override of it changed after they ran (D-012). Record every change in docs/decisions.md.",
+  "description": "Receiving -> Prep (FBA units) | Pack (merchant-fulfilled units) -> Returns (if a return happened) -> Recovery. Returns and Recovery judge with upstream evidence, so resume re-runs them when that evidence or an override of it changed after they ran (D-012). Record every change in docs/decisions.md. Prep, Pack and Returns set needs_confirmed_product: when Receiving FAILs because the ordered product did not arrive (wrong item, no product visible, none counted), the workflow halts for a person before them (D-018).",
   "steps": [
     {
       "stage": "receiving"
@@ -11,7 +11,8 @@
           "fba"
         ]
       },
-      "stage": "prep"
+      "stage": "prep",
+      "needs_confirmed_product": true
     },
     {
       "when": {
@@ -19,7 +20,8 @@
           "mfn"
         ]
       },
-      "stage": "pack"
+      "stage": "pack",
+      "needs_confirmed_product": true
     },
     {
       "when": {
@@ -28,7 +30,8 @@
         ]
       },
       "stage": "returns",
-      "rerun_when_upstream_changes": true
+      "rerun_when_upstream_changes": true,
+      "needs_confirmed_product": true
     },
     {
       "stage": "recovery",

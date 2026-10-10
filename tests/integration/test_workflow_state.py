@@ -9,6 +9,8 @@ import pytest
 
 from orchestration.orchestrator import apply_override, bundle, load_flow, resume, run_workflow
 from orchestration.store import EvidenceConflict, MemoryStore
+from shared.utils.hashing import content_hash
+from shared.utils.records import check
 from shared.utils.schema import errors
 from tests.helpers import Boom, Fake
 
@@ -95,6 +97,82 @@ def test_override_then_resume_completes_a_blocked_workflow():
     assert wf["status"] == "BLOCKED", "overriding does not silently resume"
     wf = resume(wf["workflow_id"], flow, store, clients)
     assert (wf["status"], wf["final_outcome"]["outcome"]) == ("COMPLETED", "CLEAN")
+
+
+# ------------------------------------------------------------ a product Receiving did not confirm stops the flow (D-018)
+KINDLE = "SKU-KINDLE-PW11 (Amazon Kindle Paperwhite (11th generation, 2023))"
+SONY = "SKU-SONY-MDRV6 (Sony MDR-V6 Studio Monitor Headphones)"
+
+
+class ReceivingFail(Fake):
+    """Receiving FAIL with the checks the real agent reports: (check_key, verdict, observed[, expected])."""
+
+    def __init__(self, *checks):
+        super().__init__("FAIL", needs_human=False, outcome="accept_with_exceptions")
+        self.checks = checks
+
+    def run(self, request, timeout_s):
+        out = super().run(request, timeout_s)
+        out["evidence"]["checks"] = [check(c[0], c[1], 0.9, observed=c[2], expected=c[3] if len(c) > 3 else KINDLE)
+                                     for c in self.checks]
+        out["evidence"]["content_hash"] = content_hash(out["evidence"])
+        return out
+
+
+SEEN = (("identity_match", "UNCERTAIN", "uncertain"), ("quantity", "PASS", 1), ("unit_damage", "PASS", "none"))
+
+
+@pytest.mark.parametrize("checks", [
+    # live run LIVE-111023-D885: a logo as the Receiving photo
+    (("identity_match", "UNCERTAIN", "uncertain"), ("quantity", "UNCERTAIN", None), ("unit_damage", "UNCERTAIN", "uncertain"),
+     ("quality_flags", "FAIL", ["no_product_visible"])),
+    # the same photo again (LIVE-112246-84F9): the model named the flag differently, and an unknown name still halts
+    (("identity_match", "UNCERTAIN", "uncertain"), ("quantity", "UNCERTAIN", None), ("unit_damage", "UNCERTAIN", "uncertain"),
+     ("quality_flags", "FAIL", ["odd_new_flag_name"])),
+    # live run LIVE-105948-6B18: a Kindle photo for a DualSense order
+    SEEN + (("quality_flags", "FAIL", ["wrong_item"]),),
+    SEEN[1:] + (("identity_match", "FAIL", "SKU-DUALSENSE-WHT"),),
+    (SEEN[0], ("quantity", "FAIL", 0), SEEN[2]),
+], ids=["logo", "logo-unknown-flag", "wrong-item-flag", "other-sku-read", "none-counted"])
+def test_receiving_fail_on_the_product_itself_halts_before_prep(checks):
+    clients = fakes(receiving=ReceivingFail(*checks))
+    wf = run_workflow(CASE, STANDARD, MemoryStore(), clients)
+    states = {s["stage"]: s["state"] for s in wf["stage_results"]}
+    assert states["prep"] == states["returns"] == states["recovery"] == "pending"
+    assert clients["prep"].calls == 0, "Prep must not judge a product that never arrived"
+    assert wf["halted"]["stage"] == "prep" and "a person must decide" in wf["halted"]["reason"].lower()
+    assert wf["final_outcome"]["needs_human"] and "Halted at prep" in wf["final_outcome"]["reason"]
+    assert valid(wf)
+
+
+def test_wrong_product_halts_before_pack_on_a_merchant_order():
+    clients = fakes(receiving=ReceivingFail(*SEEN, ("quality_flags", "FAIL", ["wrong_item"])))
+    wf = run_workflow({**CASE, "route": "mfn"}, STANDARD, MemoryStore(), clients)
+    assert wf["halted"]["stage"] == "pack" and clients["pack"].calls == 0
+
+
+@pytest.mark.parametrize("checks", [
+    SEEN[:2] + (("unit_damage", "FAIL", "crushing"),),
+    # demo set 4 (a real crushed Sony box): Receiving read "MDR-V6", the right model, but its letter-for-letter
+    # compare with the SKU code calls that a FAIL; the damage claim must still reach Recovery
+    (("identity_match", "FAIL", "MDR-V6", SONY), ("quantity", "PASS", 1), ("unit_damage", "PASS", "none"),
+     ("carton_damage", "FAIL", "crushing"), ("quality_flags", "FAIL", ["damaged_carton"])),
+], ids=["unit-damage", "set4-model-number-read"])
+def test_damage_fail_still_runs_the_rest_so_recovery_can_claim(checks):
+    clients = fakes(receiving=ReceivingFail(*checks))
+    wf = run_workflow(CASE, STANDARD, MemoryStore(), clients)
+    assert wf["halted"] is None and clients["prep"].calls == clients["recovery"].calls == 1
+
+
+def test_override_of_receiving_lets_the_product_continue():
+    store, clients = MemoryStore(), fakes(receiving=ReceivingFail(*SEEN, ("quality_flags", "FAIL", ["no_product_visible"])))
+    wf = run_workflow(CASE, STANDARD, store, clients)
+    rid = next(s["record_id"] for s in wf["stage_results"] if s["stage"] == "receiving")
+    wf = apply_override(wf["workflow_id"], store, record_id=rid, new_verdict="PASS", actor="op_amira",
+                        reason="wrong photo uploaded; the unit on the dock is the Kindle")
+    assert wf["halted"] is not None, "overriding does not silently resume"
+    wf = resume(wf["workflow_id"], STANDARD, store, clients)
+    assert wf["halted"] is None and wf["status"] == "COMPLETED" and clients["prep"].calls == 1
 
 
 # ------------------------------------------------------------ failures are recorded, never hidden

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -31,6 +32,11 @@ from .store import EvidenceConflict, MemoryStore, TenantConflict
 ROOT = Path(__file__).resolve().parents[1]
 logger = get_logger("orchestrator")
 VERDICTS = ("PASS", "FAIL", "UNCERTAIN")
+# Receiving quality flags that mean the ordered product itself did not arrive (not damage or a count): the model
+# names them freely, e.g. wrong_item, no_product_visible, unrelated_image, empty_carton.
+NOT_THE_PRODUCT = re.compile(r"wrong.?(item|product|sku|model)|no.?(product|item|unit)|(product|item|unit)s?.?not.?(visible|present)|"
+                             r"empty|missing.?(item|product|unit)|unrelated|irrelevant|non.?product|different.?(item|product)|"
+                             r"product.?mismatch|swap|substitut", re.IGNORECASE)
 KINDS = {".jpg": "image", ".jpeg": "image", ".png": "image", ".webp": "image", ".heic": "image",
          ".mp4": "video", ".mov": "video", ".pdf": "document", ".csv": "document", ".json": "document", ".txt": "document"}
 
@@ -265,6 +271,42 @@ def _step_opts(flow: dict, stage: str) -> dict:
     return {**defaults, **{k: v for k, v in step.items() if k not in ("stage", "when")}}
 
 
+def _alnum(text) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(text or "").upper())
+
+
+def product_unconfirmed(wf: dict, store) -> str | None:
+    """Why Receiving's (effective) FAIL says the ordered product did not arrive; None when it did or nobody checked.
+
+    Only the product itself counts: a wrong, missing or unseen item makes every later check judge the wrong thing.
+    A damage or carton-count FAIL does not stop the flow (Recovery still needs it). Receiving's identity check
+    compares the text it read with the SKU code letter for letter, so reading "MDR-V6" on the right box is a FAIL
+    there; here that only counts when the text is not part of the ordered SKU or product name. A person's override
+    of the record decides.
+    """
+    sr = next((s for s in wf["stage_results"] if s["stage"] == "receiving" and s.get("record_id")), None)
+    rec = store.get_evidence(sr["record_id"], wf["org_id"]) if sr else None
+    if rec is None or effective(wf, rec)[0] != "FAIL":
+        return None
+    checks = {c.get("check_key"): c for c in rec.get("checks") or []}
+    ident, qty = checks.get("identity_match", {}), checks.get("quantity", {})
+    seen = _alnum(ident.get("observed"))
+    if ident.get("verdict") == "FAIL" and len(seen) >= 3 and seen not in _alnum(ident.get("expected")):
+        return f"Receiving read {ident.get('observed')!r}, not {ident.get('expected')}"
+    if qty.get("verdict") == "FAIL" and qty.get("observed") == 0:
+        return "Receiving counted no unit of the ordered product"
+    flags = checks.get("quality_flags", {})
+    if flags.get("verdict") == "FAIL":
+        observed = flags.get("observed")
+        hits = [str(f) for f in (observed if isinstance(observed, list) else [observed]) if NOT_THE_PRODUCT.search(str(f))]
+        if hits:
+            return f"Receiving flagged {', '.join(hits)}"
+    unit = ("identity_match", "quantity", "unit_damage")
+    if all(k in checks for k in unit) and not any(checks[k].get("verdict") == "PASS" for k in unit):
+        return "Receiving could not see the ordered product in its photos (identity, count and condition unconfirmed)"
+    return None
+
+
 # ---------------------------------------------------------------- public API
 def advance(wf: dict, flow: dict, store, clients: dict | None = None) -> dict:
     """Run every stage that has not completed (errored stages are retried), in order, until done or halted.
@@ -284,6 +326,13 @@ def advance(wf: dict, flow: dict, store, clients: dict | None = None) -> dict:
                 _log(wf, "stage_stale", sr["stage"], f"{sr['record_id']} re-run: {why}")
         if sr["state"] in ("completed", "skipped"):
             continue
+        why = product_unconfirmed(wf, store) if opts.get("needs_confirmed_product") else None
+        if why:
+            reason = (f"{why}; {sr['stage']} would judge a product that is not confirmed. A person must decide "
+                      f"(override the Receiving record, then resume)")
+            wf["halted"] = {"stage": sr["stage"], "reason": reason, "at": utcnow()}
+            _log(wf, "halted", sr["stage"], reason)
+            break
         client = (clients or {}).get(sr["stage"]) or client_for(sr["stage"])
         halt = _run_stage(wf, sr, idx, opts, store, client)
         store.save_workflow(wf)
