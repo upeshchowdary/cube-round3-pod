@@ -32,8 +32,15 @@ from pathlib import Path
 # slow model (gemini-3-flash-preview answered the same Returns request in 2.5 min once and timed out after 6 min once).
 KEY_PROBLEM = re.compile(r"\b429\b|RESOURCE_EXHAUSTED|rate.?limit|quota|exhausted|\b40[13]\b|UNAUTHENTICATED|"
                          r"PERMISSION_DENIED|API.?key|\b503\b|UNAVAILABLE|overloaded|timeout|timed out|deadline|"
-                         r"schema_error",  # a malformed model answer (after Round 2's own repair turn): a fresh try usually passes
+                         r"schema_error|"  # a malformed model answer (after Round 2's own repair turn): a fresh try usually passes
+                         r"Failed to generate JSON|json_validate_failed|Request too large",  # Groq: malformed JSON, per-minute token cap
                          re.IGNORECASE)
+# Limits that reset within a minute (Groq's "output tokens per minute (OTPM): Limit 1000", a per-minute rate limit) or
+# a model that is busy: when every key and model has been tried, waiting and trying again works. A daily quota does not.
+WAITABLE = re.compile(r"per.?minute|OTPM|TPM|RPM|Request too large|rate.?limit|\b503\b|UNAVAILABLE|overloaded|"
+                      r"high demand|timeout|timed out", re.IGNORECASE)
+DAILY = re.compile(r"daily|quota_exhausted|per.?day", re.IGNORECASE)
+WAIT_S, MAX_WAITS = 20, 2
 # Problems of the model, not the key, so the next Gemini model is tried: Google's "503 UNAVAILABLE: This model is
 # currently experiencing high demand", a timeout, and a malformed answer (gemini-3.8-flash returned schema_error on one
 # demo photo with 7 keys in a row, about 2 min each; another model answered it).
@@ -76,6 +83,10 @@ class Models:
         self.i += 1
         self._apply()
         return True
+
+    def reset(self) -> None:
+        self.i = 0
+        self._apply()
 
 
 class Keys:
@@ -140,6 +151,14 @@ class Switcher:
             return True
         return False
 
+    def start_over(self, stage: str) -> None:
+        """After a wait: back to the first key (and, for Gemini, the first model)."""
+        if PROVIDER[stage] == "groq":
+            self.groq.reset()
+        else:
+            self.gemini.reset()
+            self.models.reset()
+
 
 class Retrying:
     """Wraps an AI stage's agent client: a failure a new key or model can fix is retried at once, before the next
@@ -151,11 +170,22 @@ class Retrying:
 
     def run(self, request: dict, timeout_s: float) -> dict:
         out = self.inner.run(request, timeout_s)
-        for _ in range(MAX_SWITCHES):
+        waits = 0
+        for _ in range(MAX_SWITCHES + MAX_WAITS):
             ev = out.get("evidence") or {}
-            plan = retry_plan(self.stage, ev.get("error")) if ev.get("status") != "completed" else None
-            if not plan or not self.switcher.switch(self.stage, plan, ev.get("error")):
+            err = ev.get("error")
+            plan = retry_plan(self.stage, err) if ev.get("status") != "completed" else None
+            if not plan:
                 break
+            if not self.switcher.switch(self.stage, plan, err):
+                text = json.dumps(err or {})
+                if waits >= MAX_WAITS or not WAITABLE.search(text) or DAILY.search(text):
+                    break
+                waits += 1  # every key and model is at a per-minute limit or busy: wait it out, then start over
+                _note(self.switcher.run, f"{self.stage.title()}: every key and model is at a per-minute limit or busy "
+                                         f"({(err or {}).get('message', '')[:90]}). Waiting {WAIT_S} s, then trying again.")
+                time.sleep(WAIT_S)
+                self.switcher.start_over(self.stage)
             out = self.inner.run(request, timeout_s)
         ev = out.get("evidence") or {}
         if (self.stage == "receiving" and ev.get("status") != "completed" and os.environ.get("RECEIVING_MODEL_MODE") == "live"
