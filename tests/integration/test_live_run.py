@@ -10,6 +10,7 @@ import base64
 import copy
 import csv
 import io
+import json
 import time
 
 import pytest
@@ -167,7 +168,8 @@ def test_a_failed_model_call_is_retried_with_another_model_or_key(monkeypatch):
                                                     "experiencing high demand."}
     assert live_run.retry_plan("receiving", overloaded) == "model"
     assert live_run.retry_plan("returns", {"code": "model_call_failed:quota_exhausted"}) == "key"
-    assert live_run.retry_plan("returns", {"code": "model_call_failed:timeout"}) == "key"
+    assert live_run.retry_plan("returns", {"code": "model_call_failed:timeout"}) == "model"
+    assert live_run.retry_plan("returns", {"code": "model_call_failed:schema_error"}) == "model"  # a malformed answer
     assert live_run.retry_plan("pack", {"message": "VLM failure: HTTP 503 overloaded"}) == "key"  # one Groq model
     assert live_run.retry_plan("returns", {"code": "no_reference_photo"}) is None  # another try cannot fix that
     assert live_run.retry_plan("recovery", {"code": "model_call_failed:timeout"}) is None
@@ -179,6 +181,69 @@ def test_a_failed_model_call_is_retried_with_another_model_or_key(monkeypatch):
     assert m.models == list(live_run.GEMINI_MODELS) and m.advance()
     import os
     assert os.environ["RETURNS_LIVE_MODEL"] == os.environ["RECEIVING_MODEL"] == "gemini-3-flash-preview"
+
+
+class _FakeAgent:
+    """Answers with the queued outputs in turn and records which model / key / mode each call saw."""
+
+    def __init__(self, outputs):
+        self.outputs, self.seen = list(outputs), []
+
+    def run(self, request, timeout_s):
+        import os
+        self.seen.append((os.environ.get("RECEIVING_MODEL"), os.environ.get("GEMINI_API_KEY"),
+                          os.environ.get("RECEIVING_MODEL_MODE")))
+        return self.outputs.pop(0)
+
+
+def _out(status, code="", message=""):
+    return {"evidence": {"status": status, "error": {"code": code, "message": message} if status != "completed" else None}}
+
+
+@pytest.fixture
+def switcher(monkeypatch, tmp_path):
+    from orchestration import live_run
+    for name in ("RETURNS_LIVE_MODEL", "RECEIVING_MODEL", "RECEIVING_MODEL_MODE"):
+        monkeypatch.setenv(name, "unset")  # restored after the test
+    for name in ("GEMINI_API_KEY", "GROQ_API_KEY", "GROQ_API_KEYS"):
+        monkeypatch.setenv(name, "")  # empty = no key; restored after the test
+    monkeypatch.delenv("LIVE_GEMINI_MODELS", raising=False)
+    monkeypatch.delenv("LIVE_GEMINI_MODEL", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEYS", "k1,k2")
+    monkeypatch.setenv("RECEIVING_MODEL_MODE", "live")
+    (tmp_path / "status.json").write_text('{"notes": []}')
+    gemini = live_run.Keys("Gemini", "GEMINI_API_KEY", "GEMINI_API_KEYS")
+    groq = live_run.Keys("Groq", "GROQ_API_KEY", "GROQ_API_KEYS")
+    return live_run, live_run.Switcher(tmp_path, gemini, groq, live_run.Models()), tmp_path
+
+
+def test_an_overloaded_model_is_retried_at_once_on_the_next_model(switcher):
+    live_run, sw, run = switcher
+    agent = _FakeAgent([_out("pending", "model_error", "503 UNAVAILABLE high demand"), _out("completed")])
+    out = live_run.Retrying("receiving", agent, sw).run({}, 30)
+    assert out["evidence"]["status"] == "completed"
+    assert [s[0] for s in agent.seen] == ["gemini-3.8-flash", "gemini-3-flash-preview"]
+    assert "could not answer" in json.loads((run / "status.json").read_text())["notes"][0]["text"]
+
+
+def test_used_up_keys_move_to_the_next_model_with_the_keys_from_the_start(switcher):
+    live_run, sw, _ = switcher
+    quota = _out("pending", "model_error", "429 RESOURCE_EXHAUSTED")
+    agent = _FakeAgent([quota, quota, _out("completed")])
+    out = live_run.Retrying("returns", agent, sw).run({}, 30)
+    assert out["evidence"]["status"] == "completed"
+    assert [(m, k) for m, k, _ in agent.seen] == [("gemini-3.8-flash", "k1"), ("gemini-3.8-flash", "k2"),
+                                                  ("gemini-3-flash-preview", "k1")]
+
+
+def test_receiving_judges_the_typed_counts_when_no_gemini_option_works(switcher):
+    live_run, sw, run = switcher
+    overloaded = _out("pending", "model_error", "503 UNAVAILABLE")
+    agent = _FakeAgent([overloaded, overloaded, overloaded, _out("completed")])  # 3 models overloaded, then replay
+    out = live_run.Retrying("receiving", agent, sw).run({}, 30)
+    assert out["evidence"]["status"] == "completed"
+    assert agent.seen[-1][2] == "replay"
+    assert "judged the counts typed into the form" in json.loads((run / "status.json").read_text())["notes"][-1]["text"]
 
 
 def test_unknown_or_malformed_run_ids_are_404(client):

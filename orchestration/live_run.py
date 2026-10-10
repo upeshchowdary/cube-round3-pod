@@ -13,10 +13,10 @@ workflow is saved after every stage. It runs in its own process so DATA_DIR / IN
 serving the dashboard.
 
 AI: Receiving (Gemini) looks at the receiving photos when there are any, Pack (Groq) at the open-box photo, Returns
-(Gemini) at the returned item against the reference photo it takes from Pack or Receiving. When a model call fails
-because a key hit its limit or is not accepted, the next key from GEMINI_API_KEYS / GROQ_API_KEYS is put in place and the
-workflow is resumed: the orchestrator re-runs the failed stage, and Returns / Recovery re-run on the new upstream record.
-Every switch is written to status.json (key numbers only, never a key).
+(Gemini) at the returned item against the reference photo it takes from Pack or Receiving. When a model call fails in
+a way a new key or model can fix, the stage is retried at once, before the next stage runs (Retrying / Switcher): the
+next key from GEMINI_API_KEYS / GROQ_API_KEYS, or the next Gemini model when one is overloaded or every key is used up on
+it. Every switch is written to status.json (key numbers only, never a key).
 """
 from __future__ import annotations
 
@@ -34,17 +34,19 @@ KEY_PROBLEM = re.compile(r"\b429\b|RESOURCE_EXHAUSTED|rate.?limit|quota|exhauste
                          r"PERMISSION_DENIED|API.?key|\b503\b|UNAVAILABLE|overloaded|timeout|timed out|deadline|"
                          r"schema_error",  # a malformed model answer (after Round 2's own repair turn): a fresh try usually passes
                          re.IGNORECASE)
-# Google's "503 UNAVAILABLE: This model is currently experiencing high demand": the model, not the key, is the problem,
-# so the next Gemini model is tried (a different key on the same model rarely helps).
-OVERLOADED = re.compile(r"\b503\b|UNAVAILABLE|overloaded|high demand", re.IGNORECASE)
+# Problems of the model, not the key, so the next Gemini model is tried: Google's "503 UNAVAILABLE: This model is
+# currently experiencing high demand", a timeout, and a malformed answer (gemini-3.8-flash returned schema_error on one
+# demo photo with 7 keys in a row, about 2 min each; another model answered it).
+OVERLOADED = re.compile(r"\b503\b|UNAVAILABLE|overloaded|high demand|timeout|timed out|deadline|schema_error",
+                        re.IGNORECASE)
 GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.6-flash")
 PROVIDER = {"receiving": "gemini", "returns": "gemini", "pack": "groq"}
 MAX_SWITCHES = 12
 
 
 def retry_plan(stage: str, error: dict | None) -> str | None:
-    """What to change before retrying a failed stage: 'model' (Gemini overloaded), 'key' (limit, quota, auth, timeout,
-    malformed answer), or None (a failure another try cannot fix, e.g. no reference photo)."""
+    """What to change before retrying a failed stage: 'model' (Gemini overloaded, timed out, or answered malformed),
+    'key' (limit, quota, refused key), or None (a failure another try cannot fix, e.g. no reference photo)."""
     text = json.dumps(error or {})
     if stage not in PROVIDER or not KEY_PROBLEM.search(text):
         return None
@@ -98,6 +100,72 @@ class Keys:
         os.environ[self.single] = self.keys[self.i]
         return True
 
+    def reset(self) -> None:
+        """Back to the first key (a quota is per key and per model: a new model starts the keys over)."""
+        if self.keys:
+            self.i = 0
+            os.environ[self.single] = self.keys[0]
+
+
+class Switcher:
+    """Picks what to change before an AI stage is tried again, and says so on the page.
+
+    Gemini: an overloaded model (503) moves to the next model; a used-up or refused key (429, 401/403), a timeout or a
+    malformed answer moves to the next key, and when every key has been tried on this model, to the next model with the
+    keys from the start (quotas are per key per model). Groq (Pack): the next key.
+    """
+
+    def __init__(self, run: Path, gemini: "Keys", groq: "Keys", models: "Models"):
+        self.run, self.gemini, self.groq, self.models = run, gemini, groq, models
+
+    def switch(self, stage: str, plan: str, error: dict | None) -> bool:
+        why = (error or {}).get("message", "")[:110]
+        name = stage.title()
+        if PROVIDER[stage] == "groq":
+            before = self.groq.i + 1
+            if self.groq.advance():
+                _note(self.run, f"{name}: Groq key {before} failed ({why}). Retrying with key {self.groq.i + 1}.")
+                return True
+            return False
+        if plan == "key":
+            before = self.gemini.i + 1
+            if self.gemini.advance():
+                _note(self.run, f"{name}: Gemini key {before} failed on {self.models.current} ({why}). Retrying with key {self.gemini.i + 1}.")
+                return True
+        before = self.models.current
+        if self.models.advance():
+            self.gemini.reset()
+            reason = "could not answer" if plan == "model" else "failed on every key"
+            _note(self.run, f"{name}: Gemini model {before} {reason} ({why}). Retrying with {self.models.current}.")
+            return True
+        return False
+
+
+class Retrying:
+    """Wraps an AI stage's agent client: a failure a new key or model can fix is retried at once, before the next
+    stage runs, so a later stage already uses what works. Receiving, if no Gemini key or model works at all, judges
+    the counts typed into the form instead (its normal mode without photos) and the page says so."""
+
+    def __init__(self, stage: str, inner, switcher: Switcher):
+        self.stage, self.inner, self.switcher = stage, inner, switcher
+
+    def run(self, request: dict, timeout_s: float) -> dict:
+        out = self.inner.run(request, timeout_s)
+        for _ in range(MAX_SWITCHES):
+            ev = out.get("evidence") or {}
+            plan = retry_plan(self.stage, ev.get("error")) if ev.get("status") != "completed" else None
+            if not plan or not self.switcher.switch(self.stage, plan, ev.get("error")):
+                break
+            out = self.inner.run(request, timeout_s)
+        ev = out.get("evidence") or {}
+        if (self.stage == "receiving" and ev.get("status") != "completed" and os.environ.get("RECEIVING_MODEL_MODE") == "live"
+                and retry_plan(self.stage, ev.get("error"))):
+            os.environ["RECEIVING_MODEL_MODE"] = "replay"
+            _note(self.switcher.run, "Receiving: no Gemini key or model is available right now, so Receiving judged the counts "
+                                     "typed into the form instead (no AI on the receiving photos).")
+            out = self.inner.run(request, timeout_s)
+        return out
+
 
 def _status(run: Path, **fields) -> None:
     path = run / "status.json"
@@ -145,7 +213,8 @@ def main(run_dir: str) -> int:
     if not spec.get("ai", {}).get("pack"):
         os.environ["GROQ_API_KEY"] = os.environ["OPENROUTER_API_KEY"] = ""  # no photo: Pack replays the typed box contents
 
-    from orchestration.orchestrator import load_flow, resume, run_workflow, workflow_id_for
+    from orchestration.clients import client_for
+    from orchestration.orchestrator import load_flow, run_workflow
     from orchestration.store import FileStore
     from shared.utils import sample_data
 
@@ -154,30 +223,12 @@ def main(run_dir: str) -> int:
     try:
         case = sample_data.case_for(unit, org, route_hint=spec["route"], returned=spec["returned"])
         flow, store = load_flow(), FileStore(run / "out")
-        wf = run_workflow(case, flow, store)
-        for _ in range(MAX_SWITCHES):
-            stuck = [(s, retry_plan(s["stage"], s.get("error"))) for s in wf["stage_results"] if s["state"] == "error"]
-            stuck = [(s, plan) for s, plan in stuck if plan]
-            if not stuck:
-                break
-            switched, models_moved = False, False
-            for s, plan in stuck:
-                why = (s.get("error") or {}).get("message", "")[:120]
-                if plan == "model" and not models_moved:
-                    before = models.current
-                    if models.advance():
-                        switched = models_moved = True  # one model step per round, even if two stages hit it
-                        _note(run, f"{s['stage'].title()}: Gemini model {before} is overloaded ({why}). Retrying with {models.current}.")
-                        continue
-                keys = gemini if PROVIDER[s["stage"]] == "gemini" else groq
-                before = keys.i + 1
-                if keys.advance():
-                    switched = True
-                    _note(run, f"{s['stage'].title()}: {keys.name} key {before} failed ({why}). Retrying with key {keys.i + 1}.")
-            if not switched:
-                _note(run, "No spare key or model left for the failed stage(s); the failure stays recorded (fail-open).")
-                break
-            wf = resume(workflow_id_for(case), flow, store)
+        switcher = Switcher(run, gemini, groq, models)
+        clients = {stage: Retrying(stage, client_for(stage), switcher) for stage in PROVIDER}
+        wf = run_workflow(case, flow, store, clients)
+        # Retries happen inside each AI stage (Retrying); what is still failing here had no key or model left.
+        if any(s["state"] == "error" and retry_plan(s["stage"], s.get("error")) for s in wf["stage_results"]):
+            _note(run, "No spare key or model left for the failed stage(s); the failure stays recorded (fail-open).")
         _status(run, state="done", finished_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 keys_used={"gemini": gemini.i + 1 if gemini.keys else 0, "groq": groq.i + 1 if groq.keys else 0},
                 gemini_model=models.current)
