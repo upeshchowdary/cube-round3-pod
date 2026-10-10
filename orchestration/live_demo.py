@@ -31,6 +31,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .live_run import GEMINI_MODELS
 from .orchestrator import ROOT
 from .store import FileStore
 
@@ -279,7 +280,7 @@ def config() -> dict:
         "charge_types": CHARGE_TYPES, "report_types": REPORT_TYPES, "prep_observed": PREP_OBSERVED,
         "keys": {"gemini": _key_count("GEMINI_API_KEY", "GEMINI_API_KEYS"),
                  "groq": _key_count("GROQ_API_KEY", "GROQ_API_KEYS") + _key_count("OPENROUTER_API_KEY", "")},
-        "models": {"gemini": os.environ.get("LIVE_GEMINI_MODEL") or "gemini-3.8-flash",
+        "models": {"gemini": os.environ.get("LIVE_GEMINI_MODEL") or GEMINI_MODELS[0],
                    "groq": os.environ.get("PACK_MODEL_NAME") or "qwen/qwen3.8-27b"},
     }
 

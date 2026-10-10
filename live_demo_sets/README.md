@@ -14,8 +14,9 @@ Recovery) through the orchestrator, exactly as for anything typed in by hand, wi
 2. In **Ready-made demo sets**, pick a product and press **Load into the form**: the form is filled and the set's
    photos are attached. (Or type the values from the set's `INPUTS.md` and add the photos from its folders yourself.)
 3. Press **Start processing** and walk through the agents as they finish. A whole set takes 25 s to 1.5 min
-   (Gemini `gemini-3.8-flash`); explain Receiving and Pack while Returns works. If a model call fails (a key's limit, a
-   timeout, a malformed answer) the run retries on the next key by itself and says so on the page.
+   (Gemini, fastest model first: `gemini-3.6-flash`, set 2 in 69 s on 2026-10-10); explain Receiving and Pack while
+   Returns works. If a model call fails or is slow (a key's limit, a 90 s timeout, a malformed answer) the run retries
+   on the next key or model by itself and says so on the page.
 
 ## The sets
 

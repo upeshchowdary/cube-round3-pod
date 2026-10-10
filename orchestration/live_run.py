@@ -46,7 +46,10 @@ WAIT_S, MAX_WAITS = 20, 2
 # demo photo with 7 keys in a row, about 2 min each; another model answered it).
 OVERLOADED = re.compile(r"\b503\b|UNAVAILABLE|overloaded|high demand|timeout|timed out|deadline|schema_error",
                         re.IGNORECASE)
-GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.6-flash")
+# Fastest first. Measured 2026-10-10 on one key, same returned-item photo and question, same (right) answer from all:
+# gemini-3.6-flash 4.9 s, gemini-3-flash-preview 4.5 s, gemini-3.8-flash 73 s (a full Returns judgment on 3.8-flash
+# took 488 s that day: 4 calls of about 2 min, none failing, so nothing ever switched).
+GEMINI_MODELS = ("gemini-3.6-flash", "gemini-3-flash-preview", "gemini-3.8-flash")
 PROVIDER = {"receiving": "gemini", "returns": "gemini", "pack": "groq"}
 MAX_SWITCHES = 12
 
@@ -67,6 +70,7 @@ class Models:
         wanted = [m.strip() for m in os.environ.get("LIVE_GEMINI_MODELS", "").split(",") if m.strip()] or \
             [os.environ.get("LIVE_GEMINI_MODEL") or GEMINI_MODELS[0], *GEMINI_MODELS]
         self.models = list(dict.fromkeys(wanted))
+        self.slow: set[str] = set()  # timed out in this run: later stages do not wait on them again
         self.i = 0
         self._apply()
 
@@ -85,7 +89,8 @@ class Models:
         return True
 
     def reset(self) -> None:
-        self.i = 0
+        """Back to the first model that has not timed out in this run (the first one if all have)."""
+        self.i = next((i for i, m in enumerate(self.models) if m not in self.slow), 0)
         self._apply()
 
 
@@ -121,9 +126,10 @@ class Keys:
 class Switcher:
     """Picks what to change before an AI stage is tried again, and says so on the page.
 
-    Gemini: an overloaded model (503) moves to the next model; a used-up or refused key (429, 401/403), a timeout or a
-    malformed answer moves to the next key, and when every key has been tried on this model, to the next model with the
-    keys from the start (quotas are per key per model). Groq (Pack): the next key.
+    Gemini: an overloaded model (503), a timeout or a malformed answer moves to the next model (a timed-out model is
+    remembered as slow for the rest of the run); a used-up or refused key (429, 401/403) moves to the next key, and when
+    every key has been tried on this model, to the next model with the keys from the start (quotas are per key per
+    model). Groq (Pack): the next key.
     """
 
     def __init__(self, run: Path, gemini: "Keys", groq: "Keys", models: "Models"):
@@ -144,12 +150,22 @@ class Switcher:
                 _note(self.run, f"{name}: Gemini key {before} failed on {self.models.current} ({why}). Retrying with key {self.gemini.i + 1}.")
                 return True
         before = self.models.current
+        if plan == "model" and re.search(r"timeout|timed out|deadline", why + json.dumps(error or {}), re.IGNORECASE):
+            self.models.slow.add(before)
         if self.models.advance():
             self.gemini.reset()
             reason = "could not answer" if plan == "model" else "failed on every key"
             _note(self.run, f"{name}: Gemini model {before} {reason} ({why}). Retrying with {self.models.current}.")
             return True
         return False
+
+    def fresh(self, stage: str) -> None:
+        """Before a Gemini stage: the first key and the fastest model again. A switch made for an earlier stage (a
+        503 is often a moment of high demand) must not push this stage onto slower models; only a model that timed
+        out in this run is skipped."""
+        if PROVIDER.get(stage) == "gemini":
+            self.gemini.reset()
+            self.models.reset()
 
     def start_over(self, stage: str) -> None:
         """After a wait: back to the first key (and, for Gemini, the first model)."""
@@ -162,13 +178,15 @@ class Switcher:
 
 class Retrying:
     """Wraps an AI stage's agent client: a failure a new key or model can fix is retried at once, before the next
-    stage runs, so a later stage already uses what works. Receiving, if no Gemini key or model works at all, judges
-    the counts typed into the form instead (its normal mode without photos) and the page says so."""
+    stage runs. Each Gemini stage starts on the fastest model that has not timed out in this run. Receiving, if no
+    Gemini key or model works at all, judges the counts typed into the form instead (its normal mode without photos)
+    and the page says so."""
 
     def __init__(self, stage: str, inner, switcher: Switcher):
         self.stage, self.inner, self.switcher = stage, inner, switcher
 
     def run(self, request: dict, timeout_s: float) -> dict:
+        self.switcher.fresh(self.stage)
         out = self.inner.run(request, timeout_s)
         waits = 0
         for _ in range(MAX_SWITCHES + MAX_WAITS):
@@ -229,16 +247,17 @@ def main(run_dir: str) -> int:
     })
     # Returns (Round 2 settings) tuned for a demo someone is watching: the second-opinion step thinks "medium" instead
     # of "high", and crops go at "high" instead of "ultra_high" (about 7 min -> 2.5 min on the same photos, same verdict).
-    # The 180 s per-call timeout stays: gemini-3-flash-preview sometimes needs more than 90 s for one judgment call.
-    for name, value in (("RM_ESCALATION_THINKING", "medium"), ("RM_CROP_RESOLUTION", "high")):
+    # A call gives up after 90 s (Round 2 default 180 s) and the next model is tried: a model that is slow but never
+    # fails would otherwise hold a judgment of up to 4 calls for many minutes (488 s on 2026-10-10).
+    for name, value in (("RM_ESCALATION_THINKING", "medium"), ("RM_CROP_RESOLUTION", "high"), ("RM_MODEL_TIMEOUT_S", "90")):
         os.environ.setdefault(name, value)
     import shared  # noqa: F401  (loads .env: keys and model names, never overriding what is set above)
 
     gemini = Keys("Gemini", "GEMINI_API_KEY", "GEMINI_API_KEYS")
     groq = Keys("Groq", "GROQ_API_KEY", "GROQ_API_KEYS")
-    # gemini-3.8-flash first (the model Returns was built on in Round 2): the same DualSense Returns judgment took 55 s
-    # and was right, where gemini-3-flash-preview took 2.5 to 6 min. When Google says a model is overloaded (503), the
-    # next model is tried. LIVE_GEMINI_MODEL / LIVE_GEMINI_MODELS change the order.
+    # Model speed changes from day to day (gemini-3-flash-preview took 2.5 to 6 min on 2026-10-09, gemini-3.8-flash
+    # 73 s for one photo on 2026-10-10), so the order is GEMINI_MODELS, fastest measured first. An overloaded (503),
+    # timed-out or malformed answer moves to the next model. LIVE_GEMINI_MODEL / LIVE_GEMINI_MODELS change the order.
     models = Models()
     if not spec.get("ai", {}).get("pack"):
         os.environ["GROQ_API_KEY"] = os.environ["OPENROUTER_API_KEY"] = ""  # no photo: Pack replays the typed box contents
