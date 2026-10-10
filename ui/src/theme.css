@@ -101,6 +101,8 @@
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   padding: 12px 32px;
+  position: relative;
+  z-index: 50;
 }
 .crumb-inline { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--muted); }
 .topbar-actions { gap: 10px; }

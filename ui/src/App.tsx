@@ -11,6 +11,7 @@ import {
   GitBranch,
   Info,
   Layers3,
+  LogOut,
   Play,
   RefreshCw,
   Search,
@@ -55,6 +56,15 @@ import { exampleAgents } from './data'
 // The cover page brings three.js, GSAP and Lenis: load it only when / is opened, not with the control center.
 const CoverPage = React.lazy(() => import('./cover/CoverPage'))
 const LiveRunPage = React.lazy(() => import('./live/LiveRunPage'))
+import { LoginPage } from './components/LoginPage'
+import {
+  getStoredSession,
+  logoutSession,
+  mapSupabaseUserToSession,
+  saveStoredSession,
+  supabase,
+  type UserSession,
+} from './services/supabase'
 import { StageEvidence } from './components/StageEvidence'
 import {
   api,
@@ -266,6 +276,9 @@ interface AppContextType {
   cases: CaseItem[]
   isBackendConnected: boolean
   loaded: boolean
+  session: UserSession | null
+  login: (session: UserSession) => void
+  logout: () => Promise<void>
   refreshData: () => Promise<void>
   openRunModal: () => void
   openOverrideModal: (ctx: { workflowId: string; recordId: string; currentVerdict: string; stage?: string }) => void
@@ -311,6 +324,34 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [cases, setCases] = useState<CaseItem[]>([])
   const [isBackendConnected, setIsBackendConnected] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [session, setSession] = useState<UserSession | null>(() => getStoredSession())
+
+  useEffect(() => {
+    if (!supabase) return
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (s?.user) {
+        const userSession = mapSupabaseUserToSession(s.user)
+        setSession(userSession)
+        saveStoredSession(userSession)
+      } else if (_event === 'SIGNED_OUT') {
+        setSession(null)
+        saveStoredSession(null)
+      }
+    })
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const login = (newSession: UserSession) => {
+    setSession(newSession)
+    saveStoredSession(newSession)
+  }
+
+  const logout = async () => {
+    await logoutSession()
+    setSession(null)
+  }
 
   // Modals & Drawer State
   const [runModalOpen, setRunModalOpen] = useState(false)
@@ -396,6 +437,9 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     cases,
     isBackendConnected,
     loaded,
+    session,
+    login,
+    logout,
     refreshData,
     openRunModal: () => setRunModalOpen(true),
     openOverrideModal: (ctx) => setOverrideModalContext(ctx),
@@ -439,11 +483,11 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 // ── Modals & Drawer ────────────────────────────────────────────────────────
 
 function RunWorkflowModal({ onClose }: { onClose: () => void }) {
-  const { cases, handleRunWorkflow } = useApp()
+  const { cases, handleRunWorkflow, session } = useApp()
   const navigate = useNavigate()
   const [mode, setMode] = useState<'preset' | 'custom'>('preset')
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0)
-  const [orgId, setOrgId] = useState('org_demo_alpha')
+  const [orgId, setOrgId] = useState(session?.org_id || 'org_demo_alpha')
   const [unitId, setUnitId] = useState('UNIT-0014')
   // 'auto' lets the orchestrator derive route / returned from the unit's own records (a forced wrong route would send
   // the unit to a stage that has no record for it and fail for a reason that is not real).
@@ -605,9 +649,9 @@ function OverrideModal({
   context: { workflowId: string; recordId: string; currentVerdict: string; stage?: string }
   onClose: () => void
 }) {
-  const { handleApplyOverride } = useApp()
-  // No pre-filled actor: an override must name the real person who made it.
-  const [actor, setActor] = useState('')
+  const { handleApplyOverride, session } = useApp()
+  // Pre-filled with logged-in operator identity, editable if desired
+  const [actor, setActor] = useState(session?.name || session?.email || '')
   const [newVerdict, setNewVerdict] = useState<'PASS' | 'FAIL' | 'UNCERTAIN'>('PASS')
   const [reason, setReason] = useState('')
   const [newOutcome, setNewOutcome] = useState('')
@@ -862,8 +906,24 @@ const sidebarItems = [
 
 function Shell() {
   const location = useLocation()
-  const { workflows, isBackendConnected, refreshData, openRunModal } = useApp()
+  const { workflows, isBackendConnected, refreshData, openRunModal, session, logout, login } = useApp()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const profileMenuRef = React.useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false)
+      }
+    }
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [profileMenuOpen])
 
   if (location.pathname === '/') {
     return (
@@ -871,6 +931,10 @@ function Shell() {
         <CoverPage />
       </React.Suspense>
     )
+  }
+
+  if (location.pathname === '/login' || !session) {
+    return <LoginPage onLoginSuccess={(s) => login(s)} />
   }
 
   return (
@@ -944,7 +1008,44 @@ function Shell() {
             >
               <RefreshCw size={14} />
             </button>
-            <div className="user-pill">UP</div>
+            <div className="topbar-profile-container" ref={profileMenuRef}>
+              <button
+                type="button"
+                className="topbar-user-badge"
+                onClick={() => setProfileMenuOpen((v) => !v)}
+                title={`${session?.name || 'User'} (${session?.role || 'operator'})`}
+              >
+                <div className="user-avatar-circle">
+                  {(session?.name || session?.email || 'OP').slice(0, 2).toUpperCase()}
+                </div>
+                <div className="user-text-info">
+                  <span className="user-display-name">{session?.name || 'Operator'}</span>
+                  <span className="user-display-role">{session?.role || 'operator'} · {session?.org_id || 'org'}</span>
+                </div>
+              </button>
+              {profileMenuOpen && (
+                <div className="profile-dropdown-menu">
+                  <div className="dropdown-meta-row">
+                    <span className="dropdown-email">{session?.email || 'demo@cube.local'}</span>
+                    <span className="dropdown-org">Org: {session?.org_id || 'org_demo_alpha'}</span>
+                    <span className="dropdown-org">
+                      Auth: {session?.provider === 'supabase' ? 'Supabase Cloud' : 'Demo Profile'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="dropdown-signout-btn"
+                    onClick={async () => {
+                      setProfileMenuOpen(false)
+                      await logout()
+                    }}
+                  >
+                    <LogOut size={13} />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -953,6 +1054,7 @@ function Shell() {
             <Route path="/overview" element={<OverviewPage />} />
             <Route path="/live" element={<React.Suspense fallback={null}><LiveRunPage /></React.Suspense>} />
             <Route path="/dashboard" element={<OverviewPage />} />
+            <Route path="/login" element={<LoginPage onLoginSuccess={(s) => login(s)} />} />
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
             <Route path="/units" element={<UnitsPage />} />
