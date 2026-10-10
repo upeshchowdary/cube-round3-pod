@@ -1,23 +1,38 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  ArrowRight,
+  Eye,
+  EyeOff,
   LogIn,
+  ShieldCheck,
   Sparkles,
-  UserCheck,
   UserPlus,
 } from 'lucide-react'
 import {
   DEMO_PROFILES,
+  enabledOAuthProviders,
   isSupabaseConfigured,
   loginAsDemoProfile,
   signInWithEmailPassword,
   signInWithOAuth,
   signUpWithEmailPassword,
-  type UserRole,
+  type OAuthProvider,
   type UserSession,
 } from '../services/supabase'
 import './LoginPage.css'
+
+// The flow the control center watches, shown beside the sign-in on wide screens.
+const FLOW = [
+  { name: 'Receiving', does: 'checks what arrived against the PO' },
+  { name: 'Prep', does: "Amazon's prep rules, for FBA units" },
+  { name: 'Pack', does: 'the open box, for merchant orders' },
+  { name: 'Returns', does: 'grades the returned item from photos' },
+  { name: 'Recovery', does: 'contests fees the evidence contradicts' },
+]
+
+const initials = (name: string) => name.split(' ').map((w) => w[0]).join('').slice(0, 2)
 
 interface LoginPageProps {
   onLoginSuccess: (session: UserSession) => void
@@ -25,6 +40,9 @@ interface LoginPageProps {
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  // Opened from a deep link (e.g. /live?run=...) while signed out: go back there after signing in.
+  const target = location.pathname === '/login' ? '/overview' : `${location.pathname}${location.search}`
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin')
 
   // Form states
@@ -32,17 +50,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [orgId, setOrgId] = useState('org_demo_alpha')
-  const [role, setRole] = useState<UserRole>('supervisor')
+  const [providers, setProviders] = useState<OAuthProvider[]>([])
+  const [showPassword, setShowPassword] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  useEffect(() => {
+    enabledOAuthProviders().then(setProviders)
+  }, [])
+
   const handleDemoLogin = (profileKey: string) => {
     setError(null)
     const session = loginAsDemoProfile(profileKey)
     onLoginSuccess(session)
-    navigate('/overview')
+    navigate(target)
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -57,23 +80,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     setLoading(true)
     try {
-      if (isSupabaseConfigured) {
-        const session = await signInWithEmailPassword(email.trim(), password)
-        onLoginSuccess(session)
-        navigate('/overview')
-      } else {
-        // Fallback for demo when Supabase credentials are not set
-        const demoSession: UserSession = {
-          id: `usr_${Math.random().toString(36).slice(2, 9)}`,
-          email: email.trim(),
-          name: fullName || email.split('@')[0],
-          role: role,
-          org_id: orgId || 'org_demo_alpha',
-          provider: 'demo',
-        }
-        onLoginSuccess(demoSession)
-        navigate('/overview')
-      }
+      const session = await signInWithEmailPassword(email.trim(), password)
+      onLoginSuccess(session)
+      navigate(target)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
@@ -94,31 +103,18 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     setLoading(true)
     try {
-      if (isSupabaseConfigured) {
-        const { session, requiresEmailConfirmation } = await signUpWithEmailPassword(
-          email.trim(),
-          password,
-          fullName.trim() || email.split('@')[0],
-          orgId.trim() || 'org_demo_alpha',
-          role
-        )
-        if (requiresEmailConfirmation) {
-          setNotice('Registration successful! Please check your email to confirm your account.')
-        } else if (session) {
-          onLoginSuccess(session)
-          navigate('/overview')
-        }
-      } else {
-        const demoSession: UserSession = {
-          id: `usr_${Math.random().toString(36).slice(2, 9)}`,
-          email: email.trim(),
-          name: fullName.trim() || email.split('@')[0],
-          role: role,
-          org_id: orgId.trim() || 'org_demo_alpha',
-          provider: 'demo',
-        }
-        onLoginSuccess(demoSession)
-        navigate('/overview')
+      const { session, requiresEmailConfirmation } = await signUpWithEmailPassword(
+        email.trim(),
+        password,
+        fullName.trim() || email.split('@')[0],
+        orgId.trim() || 'org_demo_alpha'
+      )
+      if (requiresEmailConfirmation) {
+        setNotice('Account created. Open the link in the email we sent you, then sign in.')
+        setActiveTab('signin')
+      } else if (session) {
+        onLoginSuccess(session)
+        navigate(target)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -128,7 +124,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   }
 
-  const handleOAuth = async (provider: 'google' | 'github') => {
+  const handleOAuth = async (provider: OAuthProvider) => {
     setError(null)
     try {
       await signInWithOAuth(provider)
@@ -140,6 +136,21 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   return (
     <div className="login-viewport">
+      <div className="login-shell">
+      <aside className="login-aside">
+        <span className="login-aside-kicker">CUBE Buildathon 2026 · Pod 05</span>
+        <h2>One evidence trail for every unit.</h2>
+        <p>Five agents look at each product in turn. The orchestrator keeps what each one saw and why, and asks a person when the evidence is not enough.</p>
+        <ol className="login-flow">
+          {FLOW.map((f, i) => (
+            <li key={f.name} style={{ animationDelay: `${120 + i * 90}ms` }}>
+              <span className="login-flow-dot">{i + 1}</span>
+              <span><b>{f.name}</b> {f.does}</span>
+            </li>
+          ))}
+        </ol>
+        <span className="login-aside-foot"><ShieldCheck size={14} /> Every decision is stored as evidence; overrides keep the original.</span>
+      </aside>
       <div className="login-card">
         <div className="login-header">
           <div className="login-brand">
@@ -151,17 +162,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             CUBE Pod 05 · Autonomous Commerce Orchestration & Ledger
           </p>
           <div className={`auth-status-badge ${isSupabaseConfigured ? 'active' : 'demo'}`}>
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                backgroundColor: isSupabaseConfigured ? '#16a34a' : '#a8701d',
-              }}
-            />
-            {isSupabaseConfigured
-              ? 'Supabase Cloud Auth Active'
-              : 'Offline / 1-Click Demo Evaluation Mode'}
+            <span className="auth-status-dot" />
+            {isSupabaseConfigured ? 'Accounts online · Supabase' : 'Demo profiles only'}
           </div>
         </div>
 
@@ -170,7 +172,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
         {/* 1-Click Judge & Demo Fast Access */}
         <div className="login-section-title">
-          <span>Fast Evaluator & Judge Access</span>
+          <span>One-click access for judges</span>
           <Sparkles size={13} />
         </div>
 
@@ -182,9 +184,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               className="demo-profile-btn"
               onClick={() => handleDemoLogin(p.key)}
             >
+              <span className="demo-avatar" style={{ backgroundColor: `${p.badgeColor}1f`, color: p.badgeColor }}>
+                {initials(p.name)}
+              </span>
               <div className="demo-profile-info">
                 <div className="demo-profile-name">
-                  <UserCheck size={14} color={p.badgeColor} />
                   <span>{p.name}</span>
                   <span
                     className="demo-role-badge"
@@ -198,16 +202,22 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </div>
                 <div className="demo-profile-desc">{p.description}</div>
               </div>
-              <div className="demo-profile-org">{p.org_id}</div>
+              <div className="demo-profile-side">
+                <span className="demo-profile-org">{p.org_id}</span>
+                <ArrowRight size={14} className="demo-arrow" />
+              </div>
             </button>
           ))}
         </div>
 
+        {/* Accounts exist only in Supabase: without it there is nothing to sign in to, so no form (it used to accept any
+            email and password as a demo session). */}
+        {isSupabaseConfigured && (
+        <>
         <div className="login-divider">
-          <span>{isSupabaseConfigured ? 'OR SIGN IN WITH SUPABASE' : 'OR ENTERPRISE SIGN IN'}</span>
+          <span>OR SIGN IN WITH YOUR ACCOUNT</span>
         </div>
 
-        {/* Supabase / Custom Form */}
         <div className="auth-tabs">
           <button
             type="button"
@@ -241,33 +251,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-field">
-                  <label htmlFor="orgid-select">Organization</label>
-                  <select
-                    id="orgid-select"
-                    className="form-input code-font"
-                    value={orgId}
-                    onChange={(e) => setOrgId(e.target.value)}
-                  >
-                    <option value="org_demo_alpha">org_demo_alpha</option>
-                    <option value="org_demo_bravo">org_demo_bravo</option>
-                  </select>
-                </div>
-                <div className="form-field">
-                  <label htmlFor="role-select">Role Clearance</label>
-                  <select
-                    id="role-select"
-                    className="form-input"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
-                  >
-                    <option value="supervisor">Supervisor</option>
-                    <option value="auditor">Auditor</option>
-                    <option value="operator">Operator</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
+              <div className="form-field">
+                <label htmlFor="orgid-select">Organization</label>
+                <select
+                  id="orgid-select"
+                  className="form-input code-font"
+                  value={orgId}
+                  onChange={(e) => setOrgId(e.target.value)}
+                >
+                  <option value="org_demo_alpha">org_demo_alpha</option>
+                  <option value="org_demo_bravo">org_demo_bravo</option>
+                </select>
               </div>
             </>
           )}
@@ -279,6 +273,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               type="email"
               className="form-input code-font"
               placeholder="operator@company.com"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -287,20 +282,31 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
           <div className="form-field">
             <label htmlFor="password-input">Password</label>
-            <input
-              id="password-input"
-              type="password"
-              className="form-input"
-              placeholder="••••••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="password-wrap">
+              <input
+                id="password-input"
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="••••••••••••"
+                autoComplete={activeTab === 'signin' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="form-submit-btn" disabled={loading}>
             {loading ? (
-              <span>Authenticating...</span>
+              <span>{activeTab === 'signin' ? 'Signing in…' : 'Creating account…'}</span>
             ) : activeTab === 'signin' ? (
               <>
                 <LogIn size={15} />
@@ -309,35 +315,28 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             ) : (
               <>
                 <UserPlus size={15} />
-                <span>Register Operator</span>
+                <span>Create account</span>
               </>
             )}
           </button>
         </form>
 
-        {isSupabaseConfigured && (
+        {providers.length > 0 && (
           <div className="oauth-row">
-            <button
-              type="button"
-              className="oauth-btn"
-              onClick={() => handleOAuth('google')}
-            >
-              Google SSO
-            </button>
-            <button
-              type="button"
-              className="oauth-btn"
-              onClick={() => handleOAuth('github')}
-            >
-              GitHub SSO
-            </button>
+            {providers.map((p) => (
+              <button key={p} type="button" className="oauth-btn" onClick={() => handleOAuth(p)}>
+                {p === 'google' ? 'Google' : 'GitHub'} SSO
+              </button>
+            ))}
           </div>
+        )}
+        </>
         )}
 
         {!isSupabaseConfigured && (
           <div style={{ marginTop: 14 }}>
             <div className="supabase-info-card">
-              <strong>Live Supabase Connection:</strong> To connect your project's hosted Supabase database, define <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code>.
+              <strong>Accounts are off:</strong> set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in the project root <code>.env</code> (on Render: Environment) to sign in with real accounts.
             </div>
           </div>
         )}
@@ -348,6 +347,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <span>Return to Public Showcase</span>
           </Link>
         </div>
+      </div>
       </div>
     </div>
   )

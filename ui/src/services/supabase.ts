@@ -124,7 +124,9 @@ export function saveStoredSession(session: UserSession | null): void {
 
 export function mapSupabaseUserToSession(user: User): UserSession {
   const meta = user.user_metadata || {}
-  const role: UserRole = meta.role || 'supervisor'
+  // The role comes from app_metadata, which only a Supabase admin can set; user_metadata is written by the user at
+  // sign-up, so a role there is not trusted. Everyone else is an operator.
+  const role: UserRole = (user.app_metadata?.role as UserRole) || 'operator'
   const org_id: string = meta.org_id || 'org_demo_alpha'
   const name: string = meta.full_name || meta.name || user.email?.split('@')[0] || 'Operator'
 
@@ -159,8 +161,7 @@ export async function signUpWithEmailPassword(
   email: string,
   password: string,
   name: string,
-  orgId: string,
-  role: UserRole = 'supervisor'
+  orgId: string
 ): Promise<{ session: UserSession | null; requiresEmailConfirmation: boolean }> {
   if (!supabase) {
     throw new Error('Supabase is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY or use 1-Click Demo Login.')
@@ -172,7 +173,6 @@ export async function signUpWithEmailPassword(
       data: {
         full_name: name,
         org_id: orgId,
-        role: role,
       },
     },
   })
@@ -187,7 +187,31 @@ export async function signUpWithEmailPassword(
   return { session: null, requiresEmailConfirmation: true }
 }
 
-export async function signInWithOAuth(provider: 'google' | 'github'): Promise<void> {
+export type OAuthProvider = 'google' | 'github'
+
+/** The OAuth providers switched on in the Supabase project (its public auth settings), so no dead button is shown. */
+export async function enabledOAuthProviders(): Promise<OAuthProvider[]> {
+  if (!isSupabaseConfigured) return []
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } })
+    if (!res.ok) return []
+    const external = ((await res.json()) as { external?: Record<string, boolean> }).external ?? {}
+    return (['google', 'github'] as const).filter((p) => external[p])
+  } catch {
+    return []
+  }
+}
+
+/** A stored Supabase session is only kept while Supabase still has it (signed out elsewhere, expired, or the build has
+ * no Supabase keys any more: the stored copy would otherwise keep someone signed in). Demo sessions are kept. */
+export async function stillSignedIn(session: UserSession | null): Promise<boolean> {
+  if (!session || session.provider !== 'supabase') return true
+  if (!supabase) return false
+  const { data } = await supabase.auth.getSession()
+  return Boolean(data.session?.user && data.session.user.id === session.id)
+}
+
+export async function signInWithOAuth(provider: OAuthProvider): Promise<void> {
   if (!supabase) {
     throw new Error('Supabase is not configured.')
   }
